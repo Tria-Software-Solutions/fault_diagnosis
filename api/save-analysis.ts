@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+import { head, put } from '@vercel/blob';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const BLOB_FILENAME = 'analysis.json';
@@ -11,18 +11,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const record = {
-      id: 'analisis',
-      savedAt: new Date().toISOString(),
-      data: req.body.data || req.body,
-    };
-    await put(BLOB_FILENAME, JSON.stringify(record), {
+    // Expects { analyses: AnalysisEntry[] }
+    const analyses = req.body.analyses || [];
+    await put(BLOB_FILENAME, JSON.stringify({ analyses }), {
       contentType: 'application/json',
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
     });
-    res.status(200).json({ success: true, id: 'analisis', filename: 'analysis.json' });
+    res.status(200).json({ success: true, count: analyses.length, filename: 'analysis.json' });
   } catch {
     res.status(200).json({ blobUnavailable: true });
   }

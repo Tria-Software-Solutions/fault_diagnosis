@@ -1,33 +1,35 @@
 /* ==========================================================================
    Analysis Storage Service
    Communicates with the Vite API middleware to save/load/check/delete
-   a single analysis file (analisis.json) in the project's analyses/ directory.
-   Falls back to localStorage when the API is unavailable (e.g. on Vercel).
+   analysis entries in the project's analyses/ directory.
+   Now stores an array of AnalysisEntry instead of a single object.
+   Falls back to localStorage when the API is unavailable.
    ========================================================================== */
 
-import type { RCAData } from '../state/store';
+import type { RCAData, AnalysisEntry } from '../state/store';
 
-const LS_KEY = 'savedAnalysis';
+const LS_KEY = 'savedAnalyses';
 
 /* ---------- localStorage fallback helpers ---------- */
 
-function lsSave(data: RCAData): void {
-  const record = {
-    id: 'analisis',
-    savedAt: new Date().toISOString(),
-    data,
-  };
-  try { localStorage.setItem(LS_KEY, JSON.stringify(record)); } catch { /* ignore */ }
-}
-
-function lsLoad(): { savedAt: string; data: RCAData } | null {
+function lsLoadAll(): AnalysisEntry[] {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
 }
 
-function lsDelete(): void {
+function lsSaveAll(entries: AnalysisEntry[]): void {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(entries)); } catch { /* ignore */ }
+}
+
+function lsAppend(entry: AnalysisEntry): void {
+  const entries = lsLoadAll();
+  entries.push(entry);
+  lsSaveAll(entries);
+}
+
+function lsDeleteAll(): void {
   try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
 }
 
@@ -49,101 +51,140 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   return data;
 }
 
-async function apiOrFallback<T>(apiCall: () => Promise<T>, fallback: () => T): Promise<T> {
-  try {
-    return await apiCall();
-  } catch {
-    return fallback();
-  }
-}
-
-async function apiOrFallbackVoid(apiCall: () => Promise<void>, fallback: () => void): Promise<void> {
-  try {
-    await apiCall();
-  } catch {
-    fallback();
-  }
-}
-
-/** Saves the current analysis to analisis.json */
+/** Saves a new analysis entry (appends to the existing list) */
 export async function saveAnalysisFile(data: RCAData): Promise<void> {
-  await apiOrFallbackVoid(
-    async () => {
-      await apiFetch<{ success: boolean }>('/api/save-analysis', {
-        method: 'POST',
-        body: JSON.stringify({ data }),
-      });
-    },
-    () => { lsSave(data); }
-  );
+  const entry: AnalysisEntry = {
+    id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
+    savedAt: new Date().toISOString(),
+    data,
+  };
+
+  try {
+    // First, try to load existing entries, then append
+    let existing: AnalysisEntry[] = [];
+    try {
+      const resp = await apiFetch<{ analyses: AnalysisEntry[] }>('/api/load-analysis');
+      existing = resp.analyses || [];
+    } catch {
+      existing = lsLoadAll();
+    }
+    existing.push(entry);
+    await apiFetch<{ success: boolean }>('/api/save-analysis', {
+      method: 'POST',
+      body: JSON.stringify({ analyses: existing }),
+    });
+    // Sync localStorage as well
+    lsSaveAll(existing);
+  } catch {
+    lsAppend(entry);
+  }
 }
 
 interface CheckResult {
   exists: boolean;
-  savedAt?: string;
-  captura?: any;
-  whys?: any;
-  ishikawa?: any;
-  acciones?: any;
+  count: number;
 }
 
-/** Checks if analisis.json exists and returns its metadata */
+/** Checks if there are any saved analyses */
 export async function checkAnalysisFile(): Promise<CheckResult> {
-  const fromLs = (): CheckResult => {
-    const record = lsLoad();
-    if (!record) return { exists: false };
-    return {
-      exists: true,
-      savedAt: record.savedAt,
-      captura: record.data?.captura || {},
-      whys: record.data?.whys || {},
-      ishikawa: record.data?.ishikawa || {},
-      acciones: record.data?.acciones || { correctivas: [], preventivas: [] },
-    };
-  };
-
   try {
     const apiResult = await apiFetch<CheckResult>('/api/check-analysis');
     if (apiResult.exists) return apiResult;
-    return fromLs();
+    const local = lsLoadAll();
+    return { exists: local.length > 0, count: local.length };
   } catch {
-    return fromLs();
+    const local = lsLoadAll();
+    return { exists: local.length > 0, count: local.length };
   }
 }
 
-/** Loads the full data from analisis.json */
-export async function loadAnalysis(): Promise<{ savedAt: string; data: RCAData }> {
+/** Loads all saved analysis entries */
+export async function loadAnalysis(): Promise<AnalysisEntry[]> {
   try {
-    const apiResult = await apiFetch<{ savedAt: string; data: RCAData }>('/api/load-analysis');
-    return apiResult;
+    const apiResult = await apiFetch<{ analyses: AnalysisEntry[] }>('/api/load-analysis');
+    return apiResult.analyses || [];
   } catch {
-    const record = lsLoad();
-    if (!record) throw new Error('Analysis not found');
-    return record;
+    return lsLoadAll();
   }
 }
 
-/** Overwrites analisis.json with new data */
+/** Replaces the entire analysis list (for updates/deletes) */
 export async function updateAnalysisFile(data: RCAData): Promise<void> {
-  await apiOrFallbackVoid(
-    async () => {
-      await apiFetch<{ success: boolean }>('/api/update-analysis', {
-        method: 'PUT',
-        body: JSON.stringify({ data }),
-      });
-    },
-    () => { lsSave(data); }
-  );
+  // Legacy support — not used for multi-entry. Use saveAnalysisFile instead.
+  await saveAnalysisFile(data);
 }
 
-/** Deletes analisis.json */
+/** Deletes all saved analyses */
 export async function deleteAnalysis(): Promise<void> {
-  await apiOrFallbackVoid(
-    async () => {
-      await apiFetch<{ success: boolean }>('/api/delete-analysis', {
-        method: 'DELETE',
-      });
-    },
-    () => { lsDelete(); }
-  );
+  try {
+    await apiFetch<{ success: boolean }>('/api/delete-analysis', {
+      method: 'DELETE',
+    });
+    lsDeleteAll();
+  } catch {
+    lsDeleteAll();
+  }
+}
+
+/** Deletes a single analysis by id */
+export async function deleteAnalysisById(id: string): Promise<void> {
+  try {
+    let existing: AnalysisEntry[] = [];
+    try {
+      const resp = await apiFetch<{ analyses: AnalysisEntry[] }>('/api/load-analysis');
+      existing = resp.analyses || [];
+    } catch {
+      existing = lsLoadAll();
+    }
+    const filtered = existing.filter(e => e.id !== id);
+    // If empty after removal, delete the file entirely
+    if (filtered.length === 0) {
+      await deleteAnalysis();
+      return;
+    }
+    await apiFetch<{ success: boolean }>('/api/save-analysis', {
+      method: 'POST',
+      body: JSON.stringify({ analyses: filtered }),
+    });
+    lsSaveAll(filtered);
+  } catch {
+    const existing = lsLoadAll();
+    const filtered = existing.filter(e => e.id !== id);
+    lsSaveAll(filtered);
+  }
+}
+
+/** Updates a single analysis entry by id (reads list, replaces entry, saves) */
+export async function updateEntryById(id: string, data: RCAData): Promise<void> {
+  try {
+    let existing: AnalysisEntry[] = [];
+    try {
+      const resp = await apiFetch<{ analyses: AnalysisEntry[] }>('/api/load-analysis');
+      existing = resp.analyses || [];
+    } catch {
+      existing = lsLoadAll();
+    }
+    const idx = existing.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      existing[idx] = { ...existing[idx], savedAt: new Date().toISOString(), data };
+    } else {
+      // If not found, append
+      existing.push({ id, savedAt: new Date().toISOString(), data });
+    }
+    await apiFetch<{ success: boolean }>('/api/save-analysis', {
+      method: 'POST',
+      body: JSON.stringify({ analyses: existing }),
+    });
+    lsSaveAll(existing);
+  } catch {
+    // Fallback: update in localStorage
+    let existing = lsLoadAll();
+    const idx = existing.findIndex(e => e.id === id);
+    if (idx >= 0) {
+      existing[idx] = { ...existing[idx], savedAt: new Date().toISOString(), data };
+    } else {
+      existing.push({ id, savedAt: new Date().toISOString(), data });
+    }
+    lsSaveAll(existing);
+  }
 }

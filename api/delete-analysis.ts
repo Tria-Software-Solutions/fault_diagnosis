@@ -12,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const meta = await head(BLOB_FILENAME);
-    if (!meta) return res.status(200).json({ blobUnavailable: true, error: 'Analysis not found' });
+    if (!meta) return res.status(200).json({ success: true });
 
     await del(BLOB_FILENAME);
     res.status(200).json({ success: true });

@@ -1,4 +1,4 @@
-import { escapeHtml, getTodayISODate } from '../utils/text';
+import { escapeHtml, getTodayISODate, formatDateDDMMYYYY } from '../utils/text';
 
 /* ==========================================================================
    TypeScript Interfaces
@@ -65,6 +65,12 @@ export interface RCAData {
   acciones: RCAAcciones;
 }
 
+export interface AnalysisEntry {
+  id: string;
+  savedAt: string;
+  data: RCAData;
+}
+
 export interface IshikawaCategoryConfig {
   label: string;
   icon: string;
@@ -121,8 +127,38 @@ export function setRcaData(data: RCAData): void {
   rcaData = data;
 }
 
+/* ── Multiple analyses (saved) ────────────────────────── */
+
+export let savedAnalyses: AnalysisEntry[] = [];
+export let selectedAnalysisIndex: number = -1;
+
+export function setSavedAnalyses(entries: AnalysisEntry[]): void {
+  savedAnalyses = entries;
+  if (selectedAnalysisIndex >= savedAnalyses.length) {
+    selectedAnalysisIndex = savedAnalyses.length - 1;
+  }
+}
+
+export function setSelectedAnalysisIndex(idx: number): void {
+  selectedAnalysisIndex = idx;
+}
+
+/** Returns the data of the currently selected analysis, or empty RCAData if none */
+export function getSelectedAnalysisData(): RCAData {
+  if (selectedAnalysisIndex >= 0 && selectedAnalysisIndex < savedAnalyses.length) {
+    return savedAnalyses[selectedAnalysisIndex].data;
+  }
+  return {
+    captura: {},
+    whys: { why1: '', why2: '', why3: '', why4: '', why5: '', wizardLevel: 1 },
+    ishikawa: {},
+    acciones: { correctivas: [], preventivas: [] }
+  };
+}
+
 /* ── Committed (saved) data for the data table ───────── */
 
+// Kept for backward compatibility — synced from selected analysis
 export let savedRcaData: RCAData = {
   captura: {},
   whys: { why1: '', why2: '', why3: '', why4: '', why5: '', wizardLevel: 1 },
@@ -134,9 +170,9 @@ export function setSavedRcaData(data: RCAData): void {
   savedRcaData = data;
 }
 
-/** Copies the current rcaData into savedRcaData (called on explicit Save) */
-export function commitWizardDataToSaved(): void {
-  savedRcaData = JSON.parse(JSON.stringify(rcaData));
+/** Syncs savedRcaData from the currently selected analysis entry */
+export function syncSavedRcaDataFromSelected(): void {
+  savedRcaData = JSON.parse(JSON.stringify(getSelectedAnalysisData()));
 }
 
 /* ==========================================================================
@@ -188,7 +224,6 @@ export function persistCurrentState(): void {
   } catch {
     // localStorage may be full or unavailable — silently skip
   }
-  // updateClearAllButton is called from main after all modules are loaded
 }
 
 /* ==========================================================================
@@ -229,38 +264,19 @@ export function formatDate(isoDate: string | string[] | undefined): string {
 }
 
 export function formatSingleDate(isoDate: string): string {
-  if (!isoDate) return '';
-  const parts = isoDate.split('-');
-  if (parts.length === 3) {
-    const d = new Date(isoDate + 'T00:00:00');
-    if (!isNaN(d.getTime())) {
-      return d.toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-      });
-    }
-  }
-  return isoDate;
+  return formatDateDDMMYYYY(isoDate);
 }
 
 export function formatShortDate(isoDate: string): string {
-  if (!isoDate) return '';
-  const parts = isoDate.split('-');
-  if (parts.length !== 3) return isoDate;
-  return `${parts[2]}/${parts[1]}`;
+  return formatDateDDMMYYYY(isoDate);
 }
 
 export function formatDateRange(from: string, to: string): string {
   if (!from || !to) return formatSingleDate(from || to);
-  const d1 = new Date(from + 'T00:00:00');
-  const d2 = new Date(to + 'T00:00:00');
-  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return `${from} — ${to}`;
-  const sameMonth = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear();
-  if (sameMonth) {
-    return `${d1.getDate()} — ${d2.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-  }
-  return `${d1.toLocaleDateString('es-ES', { day: '2-digit', month: 'long' })} — ${d2.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+  const f = formatDateDDMMYYYY(from);
+  const t = formatDateDDMMYYYY(to);
+  if (f === from || t === to) return `${from} — ${to}`;
+  return `${f} — ${t}`;
 }
 
 export function serializeDates(dates: string[] | undefined): string {
@@ -333,11 +349,11 @@ export function buildSectionRows(section: DataSection, source?: RCAData): string
     return buildHorizontalPlanTable(acciones);
   }
 
-  // Build header row (field names + Acciones column)
-  const headerRow = `<tr>${headers.map(h => `<th>${escapeHtml(h.label)}</th>`).join('')}<th>Acciones</th></tr>`;
+  // Build header row (just field names, no Acciones column)
+  const headerRow = `<tr>${headers.map(h => `<th>${escapeHtml(h.label)}</th>`).join('')}</tr>`;
   const dataRow = buildHorizontalDataRow(section, headers, data);
 
-  return `<div class="data-table-scroll"><table class="data-table data-table-h">
+  return `<div class="overflow-x-auto rounded-box border border-base-200"><table class="table table-zebra table-pin-rows w-full">
     <thead>${headerRow}</thead>
     <tbody>${dataRow}</tbody>
   </table></div>`;
@@ -385,11 +401,7 @@ function buildHorizontalDataRow(
     return buildHorizontalCell(key, value, cellDisplayValue);
   });
 
-  // Add actions column with delete-section button at the end
-  const deleteBtn = `<td class="cell-h cell-h-actions-col">
-    <button class="cell-btn cell-btn-inline cell-btn-delete-row" onclick="window.__deleteSection('${section}')" title="Limpiar sección"><i class="fas fa-trash-alt"></i></button>
-  </td>`;
-  return `<tr>${cells.join('')}${deleteBtn}</tr>`;
+  return `<tr>${cells.join('')}</tr>`;
 }
 
 /** Builds a single cell in the horizontal table (edit button per cell, no delete) */
@@ -434,74 +446,64 @@ function buildPlanHorizontalCell(key: string, value: string, displayValue: strin
   return `<td data-key="${key}" class="cell-h">${cellContent}</td>`;
 }
 
-/** Builds the Plan section as a horizontal table with inline editing and row deletion */
+/** Builds the Plan section as a single table consistent with Captura / Ishikawa / 5 Whys */
 function buildHorizontalPlanTable(acciones: RCAAcciones): string {
   const prioLabels: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
   const prioColors: Record<string, string> = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
 
-  const buildActionRows = (list: Accion[], tipo: string): string => {
-    if (list.length === 0) {
-      return `<tr><td class="cell-h" colspan="5"><span class="val-empty">Sin acciones</span></td></tr>`;
-    }
-    return list.map((a, i) => {
-      const keyPrefix = `plan.${tipo}.${i}`;
-      const descCell = buildPlanHorizontalCell(`${keyPrefix}.descripcion`, a.descripcion, escapeHtml(a.descripcion || '—'));
-      const respCell = buildPlanHorizontalCell(`${keyPrefix}.responsable`, a.responsable, escapeHtml(a.responsable || '—'));
-      const fechaCell = buildPlanHorizontalCell(`${keyPrefix}.fecha`, a.fecha, escapeHtml(formatDate(a.fecha) || '—'));
-      const prioDisplay = `<span class="plan-prio" style="background:${prioColors[a.prioridad] || '#6b7280'}">${prioLabels[a.prioridad] || a.prioridad}</span>`;
-      const prioCell = buildPlanHorizontalCell(`${keyPrefix}.prioridad`, a.prioridad, prioDisplay);
-      const deleteCell = `<td class="cell-h cell-h-actions-col">
-        <button class="cell-btn cell-btn-inline cell-btn-delete-row" onclick="window.__deletePlanRow('${tipo}', ${i})" title="Eliminar acción"><i class="fas fa-trash-alt"></i></button>
-      </td>`;
-      return `<tr>${descCell}${respCell}${fechaCell}${prioCell}${deleteCell}</tr>`;
-    }).join('');
-  };
+  // Combine all actions into a flat list with tipo marker
+  const allActions: { tipo: string; label: string; color: string; action: Accion; idx: number }[] = [
+    ...acciones.correctivas.map((a, i) => ({ tipo: 'correctivas', label: 'Correctiva', color: '#059669', action: a, idx: i })),
+    ...acciones.preventivas.map((a, i) => ({ tipo: 'preventivas', label: 'Preventiva', color: '#2563eb', action: a, idx: i }))
+  ];
 
-  const correctivasHtml = `<div style="margin-bottom:16px">
-    <h5 style="font-size:13px;font-weight:700;color:#059669;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-      <i class="fas fa-check-circle"></i> Correctivas (${acciones.correctivas.length})
-    </h5>
-    <div class="data-table-scroll">
-      <table class="data-table data-table-h">
-        <thead><tr><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th><th>Acciones</th></tr></thead>
-        <tbody>${buildActionRows(acciones.correctivas, 'correctivas')}</tbody>
+  if (allActions.length === 0) {
+    return `<div class="overflow-x-auto rounded-box border border-base-200">
+      <table class="table table-zebra table-pin-rows w-full">
+        <thead><tr><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th></tr></thead>
+        <tbody><tr><td colspan="5" class="text-center text-gray-400 italic py-4">Sin acciones registradas</td></tr></tbody>
       </table>
-    </div>
+    </div>`;
+  }
+
+  const rows = allActions.map(({ tipo, label, color, action, idx }) => {
+    const keyPrefix = `plan.${tipo}.${idx}`;
+    const tipoCell = `<td class="cell-h"><span style="color:${color};font-weight:600;font-size:12px">${label}</span></td>`;
+    const descCell = buildPlanHorizontalCell(`${keyPrefix}.descripcion`, action.descripcion, escapeHtml(action.descripcion || '—'));
+    const respCell = buildPlanHorizontalCell(`${keyPrefix}.responsable`, action.responsable, escapeHtml(action.responsable || '—'));
+    const fechaCell = buildPlanHorizontalCell(`${keyPrefix}.fecha`, action.fecha, escapeHtml(formatDate(action.fecha) || '—'));
+    const prioDisplay = `<span class="plan-prio" style="background:${prioColors[action.prioridad] || '#6b7280'}">${prioLabels[action.prioridad] || action.prioridad}</span>`;
+    const prioCell = buildPlanHorizontalCell(`${keyPrefix}.prioridad`, action.prioridad, prioDisplay);
+    return `<tr>${tipoCell}${descCell}${respCell}${fechaCell}${prioCell}</tr>`;
+  }).join('');
+
+  return `<div class="overflow-x-auto rounded-box border border-base-200">
+    <table class="table table-zebra table-pin-rows w-full">
+      <thead><tr><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
   </div>`;
-
-  const preventivasHtml = `<div style="margin-bottom:4px">
-    <h5 style="font-size:13px;font-weight:700;color:#2563eb;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-      <i class="fas fa-shield-alt"></i> Preventivas (${acciones.preventivas.length})
-    </h5>
-    <div class="data-table-scroll">
-      <table class="data-table data-table-h">
-        <thead><tr><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th><th>Acciones</th></tr></thead>
-        <tbody>${buildActionRows(acciones.preventivas, 'preventivas')}</tbody>
-      </table>
-    </div>
-  </div>`;
-
-  const deleteBtn = `<button class="cell-btn cell-btn-inline cell-btn-delete-row" onclick="window.__deleteSection('plan')" title="Limpiar sección"><i class="fas fa-trash-alt"></i></button>`;
-
-  return `${correctivasHtml}${preventivasHtml}
-  <div style="display:flex;justify-content:flex-end;margin-top:4px">${deleteBtn}</div>`;
 }
 
 /* ==========================================================================
    Data Table / Drawer Builders (shared between drawer and full table)
    ========================================================================== */
 
-/** Builds vertical tables (Campo | Valor) for the review drawer */
+/** Builds vertical tables (Campo | Valor) for the review drawer — shows only sections with data */
 export function buildDataRows(): string {
   const captura = rcaData.captura || {};
   const whys = rcaData.whys || {};
   const ishikawa = rcaData.ishikawa || {};
   const acciones = rcaData.acciones || { correctivas: [], preventivas: [] };
 
+  const hasCapturaData = !!(captura.maquina || captura.problema || captura.fecha?.length || captura.tiempoParo || captura.indicador || captura.sintomas || captura.responsable);
+  const hasIshikawaData = !!(ishikawa.maquina || ishikawa.metodo || ishikawa.materiales || ishikawa.manoObra || ishikawa.medicion || ishikawa.medioAmbiente);
+  const hasWhysData = !!(whys.why1 || whys.why2 || whys.why3 || whys.why4 || whys.why5);
+  const hasPlanData = !!(acciones.correctivas.length > 0 || acciones.preventivas.length > 0);
+
   const tables: string[] = [];
 
-  // --- Captura (solo si hay datos) ---
-  const hasCapturaData = Object.values(captura).some(v => v && String(v).trim());
+  // --- Captura (solo si tiene datos) ---
   if (hasCapturaData) {
     const capturaFields = [
       { key: 'maquina', label: 'Máquina' },
@@ -521,8 +523,7 @@ export function buildDataRows(): string {
     })));
   }
 
-  // --- Ishikawa (solo si hay datos) ---
-  const hasIshikawaData = CATEGORY_ORDER.some(cat => !!(ishikawa[cat] || '').trim());
+  // --- Ishikawa (solo si tiene datos) ---
   if (hasIshikawaData) {
     const ishikawaCats = [
       { key: 'maquina', label: 'Máquina' },
@@ -539,8 +540,7 @@ export function buildDataRows(): string {
     }))));
   }
 
-  // --- 5 Porqués (solo si hay datos) ---
-  const hasWhysData = (whys.why1 || whys.why2 || whys.why3 || whys.why4 || whys.why5);
+  // --- 5 Porqués (solo si tiene datos) ---
   if (hasWhysData) {
     const whysItems: { key: string; label: string; value: string }[] = [];
     for (let i = 1; i <= 5; i++) {
@@ -552,8 +552,7 @@ export function buildDataRows(): string {
     tables.push(buildDrawerVerticalSectionTable('5 Porqués', 'fa-question-circle text-amber-500', whysItems));
   }
 
-  // --- Plan de Acción (solo si hay datos) ---
-  const hasPlanData = acciones.correctivas.length > 0 || acciones.preventivas.length > 0;
+  // --- Plan de Acción (solo si tiene datos) ---
   if (hasPlanData) {
     tables.push(buildDrawerPlanSection(acciones));
   }
@@ -561,59 +560,63 @@ export function buildDataRows(): string {
   return tables.join('');
 }
 
-/** Builds a vertical (Campo | Valor) table for a drawer section */
+/** Builds a vertical (Campo | Valor) table for a drawer section — daisyUI modern */
 function buildDrawerVerticalSectionTable(
   title: string,
   icon: string,
   items: { key: string; label: string; value: string }[],
 ): string {
   const rows = items.map(item => {
-    const displayVal = item.value ? escapeHtml(item.value) : '<span class="val-empty">—</span>';
+    const displayVal = item.value ? escapeHtml(item.value) : '<span class="text-gray-300 italic">—</span>';
     return `<tr>
-      <th scope="row" class="cell-field">${escapeHtml(item.label)}</th>
-      <td class="cell-value">${displayVal}</td>
+      <th class="text-xs font-semibold text-gray-500 w-[30%] !bg-transparent">${escapeHtml(item.label)}</th>
+      <td class="text-sm text-gray-700 !bg-transparent">${displayVal}</td>
     </tr>`;
   }).join('');
 
-  return `<div class="drawer-section">
-    <h4 class="drawer-section-title"><i class="fas ${icon}"></i> ${escapeHtml(title)}</h4>
-    <div class="data-table-scroll">
-      <table class="data-table drawer-vertical-table">
-        <tbody>${rows}</tbody>
-      </table>
+  return `<div class="card bg-base-100/80 border border-base-200 shadow-sm mb-3">
+    <div class="card-body p-4">
+      <h4 class="card-title text-sm font-bold flex items-center gap-2 text-base-content">
+        <i class="fas ${icon}"></i> ${escapeHtml(title)}
+      </h4>
+      <div class="overflow-x-auto">
+        <table class="table table-sm w-full">
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>
   </div>`;
 }
 
-/** Builds the Plan drawer section with full action details */
+/** Builds the Plan drawer section with full action details — daisyUI modern */
 function buildDrawerPlanSection(acciones: RCAAcciones): string {
   const prioLabels: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
-  const prioColors: Record<string, string> = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
+  const prioBadge: Record<string, string> = { alta: 'badge-error', media: 'badge-warning', baja: 'badge-success' };
 
   const buildActionTable = (list: Accion[], icon: string, label: string, color: string): string => {
     if (list.length === 0) {
-      return `<div class="plan-subsection">
-        <h5 class="plan-subsection-title" style="color:${color}"><i class="fas ${icon}"></i> ${label}</h5>
-        <p class="plan-empty">Sin acciones</p>
+      return `<div class="mb-3 last:mb-0">
+        <h5 class="text-xs font-bold flex items-center gap-1.5 mb-2" style="color:${color}"><i class="fas ${icon}"></i> ${label}</h5>
+        <p class="text-xs text-gray-400 italic">Sin acciones</p>
       </div>`;
     }
 
-    const rows = list.map((a, i) => `
+    const rows = list.map(a => `
       <tr>
-        <th scope="row" class="cell-field">${escapeHtml(a.descripcion || '—')}</th>
-        <td class="cell-value">
-          <span class="plan-action-meta">
-            <span><i class="fas fa-user"></i> ${escapeHtml(a.responsable || '—')}</span>
-            <span><i class="fas fa-calendar"></i> ${escapeHtml(formatDate(a.fecha) || '—')}</span>
-            <span class="plan-prio" style="background:${prioColors[a.prioridad] || '#6b7280'}">${prioLabels[a.prioridad] || a.prioridad}</span>
-          </span>
+        <td class="text-sm font-medium text-gray-700 !bg-transparent w-1/2">${escapeHtml(a.descripcion || '—')}</td>
+        <td class="!bg-transparent">
+          <div class="flex flex-wrap gap-2 items-center text-xs text-gray-500">
+            <span class="inline-flex items-center gap-1"><i class="fas fa-user text-gray-400"></i> ${escapeHtml(a.responsable || '—')}</span>
+            <span class="inline-flex items-center gap-1"><i class="fas fa-calendar text-gray-400"></i> ${escapeHtml(formatDate(a.fecha) || '—')}</span>
+            <span class="badge badge-sm ${prioBadge[a.prioridad] || 'badge-ghost'}">${prioLabels[a.prioridad] || a.prioridad}</span>
+          </div>
         </td>
       </tr>`).join('');
 
-    return `<div class="plan-subsection">
-      <h5 class="plan-subsection-title" style="color:${color}"><i class="fas ${icon}"></i> ${label} (${list.length})</h5>
-      <div class="data-table-scroll">
-        <table class="data-table drawer-vertical-table">
+    return `<div class="mb-3 last:mb-0">
+      <h5 class="text-xs font-bold flex items-center gap-1.5 mb-2" style="color:${color}"><i class="fas ${icon}"></i> ${label} (${list.length})</h5>
+      <div class="overflow-x-auto">
+        <table class="table table-sm w-full">
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -623,10 +626,14 @@ function buildDrawerPlanSection(acciones: RCAAcciones): string {
   const correctivas = buildActionTable(acciones.correctivas, 'fa-check-circle', 'Correctivas', '#059669');
   const preventivas = buildActionTable(acciones.preventivas, 'fa-shield-alt', 'Preventivas', '#2563eb');
 
-  return `<div class="drawer-section">
-    <h4 class="drawer-section-title"><i class="fas fa-tasks text-red-500"></i> Plan de Acción</h4>
-    ${correctivas}
-    ${preventivas}
+  return `<div class="card bg-base-100/80 border border-base-200 shadow-sm mb-3">
+    <div class="card-body p-4">
+      <h4 class="card-title text-sm font-bold flex items-center gap-2 text-base-content">
+        <i class="fas fa-tasks text-red-500"></i> Plan de Acción
+      </h4>
+      ${correctivas}
+      ${preventivas}
+    </div>
   </div>`;
 }
 
@@ -642,17 +649,10 @@ export function removeActionFromState(tipo: string, index: number): void {
     list.splice(index, 1);
     rcaData.acciones[tipo === 'correctivas' ? 'correctivas' : 'preventivas'] = list;
   }
-  // We don't call persistCurrentState here because it reads from DOM
-  // Instead the caller (data-table.ts) will handle persistence
 }
 
 /* ==========================================================================
    Shared Logic: 5 Whys Cause Summary
-   ========================================================================== */
-
-/* ==========================================================================
-   Shared Logic: 5 Whys Cause Summary
-   Pure state queries used by multiple modules
    ========================================================================== */
 
 /** Gets the deepest level with content */

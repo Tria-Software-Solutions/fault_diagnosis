@@ -1,6 +1,6 @@
 import './style.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-import { rcaData, setRcaData, setSavedRcaData, commitWizardDataToSaved, persistCurrentState, hasData, CATEGORY_ORDER, type RCAData } from './state/store';
+import { rcaData, setRcaData, setSavedRcaData, savedAnalyses, setSavedAnalyses, setSelectedAnalysisIndex, syncSavedRcaDataFromSelected, persistCurrentState, hasData, CATEGORY_ORDER, type RCAData } from './state/store';
 import { escapeHtml, getTodayISODate } from './utils/text';
 import { showToast } from './utils/toast';
 import { logError, logWarn, logInfo } from './utils/logger';
@@ -8,7 +8,7 @@ import { initLogViewer } from './components/log-viewer';
 import { handleError } from './utils/errorHandler';
 import { initModal } from './utils/ui';
 import { confirmAction, confirmDanger } from './utils/confirm';
-import { saveAnalysisFile, updateAnalysisFile, checkAnalysisFile, loadAnalysis, deleteAnalysis } from './services/analysisStorage';
+import { saveAnalysisFile, checkAnalysisFile, loadAnalysis, deleteAnalysis } from './services/analysisStorage';
 import { getCurrentCauseSummary } from './state/store';
 import {
   renderWhysWizard, updateRootCauseSummary,
@@ -29,7 +29,7 @@ import { getIshikawaHistory, updateIshikawaForMachine } from './services/ishikaw
 import {
   showTab, navigateStep, updateStepNav, updateNextButtonState,
   updateTabLockState, updateClearAllButton, updateResumen,
-  syncPlanFromAnalysis, clearCurrentStep, toggleStepMenu,
+  syncPlanFromAnalysis, clearCurrentStep,
   clearCaptura, saveCaptura, syncIndicador, saveIshikawaData,
   updateIshikawaGenerateBtn, resetWhysState, STEPS
 } from './components/navigation';
@@ -62,8 +62,9 @@ declare global {
     __removeAccion: (btn: HTMLElement, tipo: string) => void;
     __handlePDFExport: () => void;
     __exportExcel: () => void;
+    __exportFullPDF: () => void;
+    __exportFullExcel: () => void;
     __navigateStep: (dir: number) => void;
-    __toggleStepMenu: (e: Event) => void;
     __clearCurrentStep: () => void;
     __saveAnalysis: () => void;
     __generateIshikawa: () => void;
@@ -76,8 +77,7 @@ declare global {
     __loadAnalysis: () => Promise<void>;
     __deleteAnalysis: () => Promise<void>;
     __switchDataTab: (section: string) => void;
-    __viewIshikawaFullscreen: () => void;
-    __closeIshikawaModal: () => void;
+
     __syncIndicador: () => void;
   }
 }
@@ -124,6 +124,14 @@ function registerGlobalAPI(): void {
   window.__removeAccion = (btn: HTMLElement, tipo: string) => removeAccion(btn, tipo, persistCurrentState);
   window.__handlePDFExport = () => handlePDFExport(updateIshikawaForMachine);
   window.__exportExcel = () => exportExcel(updateIshikawaForMachine);
+  window.__exportFullPDF = async () => {
+    const { exportAllPDF } = await import('./services/exportPDF');
+    exportAllPDF(savedAnalyses);
+  };
+  window.__exportFullExcel = async () => {
+    const { exportAllExcel } = await import('./services/exportExcel');
+    exportAllExcel(savedAnalyses);
+  };
   window.__startEdit = startEdit;
   window.__saveEdit = (key: string) => saveEdit(key, renderWhysWizard, refreshIshikawaDiagram, persistCurrentState);
   window.__cancelEdit = cancelEdit;
@@ -134,23 +142,12 @@ function registerGlobalAPI(): void {
   window.__loadAnalysis = loadAnalysisFromJson;
   window.__deleteAnalysis = deleteAnalysisFile;
   window.__navigateStep = (dir: number) => navigateStep(dir);
-  window.__toggleStepMenu = toggleStepMenu;
   window.__clearCurrentStep = clearCurrentStep;
   window.__generateIshikawa = generateIshikawa;
-  window.__viewIshikawaFullscreen = viewIshikawaFullscreen;
-  window.__closeIshikawaModal = closeIshikawaModal;
+
   window.__saveAnalysis = saveAnalysis;
 
-  // Close step menu on outside click
-  document.addEventListener('click', function(e: Event) {
-    const menu = document.getElementById('step-nav-menu');
-    const btn = document.querySelector('.step-nav-btn-ghost');
-    if (menu && menu.classList.contains('open') &&
-        btn && !btn.contains(e.target as Node) &&
-        !menu.contains(e.target as Node)) {
-      menu.classList.remove('open');
-    }
-  });
+
 }
 
 
@@ -171,24 +168,6 @@ function generateIshikawa(): void {
 }
 
 /* ==========================================================================
-   Ishikawa Fullscreen Modal
-   ========================================================================== */
-
-const ishikawaModal = initModal('ish-modal-overlay', '.ish-modal-body', '#ishikawa-diagram svg');
-
-function viewIshikawaFullscreen(): void {
-  ishikawaModal.open();
-}
-
-function closeIshikawaModal(): void {
-  ishikawaModal.close();
-}
-
-/* ==========================================================================
-   Step Menu & Clear Current Step
-   ========================================================================== */
-
-/* ==========================================================================
    Save Analysis (from Plan step)
    ========================================================================== */
 
@@ -203,20 +182,19 @@ async function saveAnalysis(): Promise<void> {
   }
 
   try {
-    // Snapshot the data before clearing
-    const savedData = JSON.parse(JSON.stringify(rcaData));
-
-    // Always overwrite the single analisis.json file
+    // Append to the analyses array in the file
     await saveAnalysisFile(rcaData);
-    commitWizardDataToSaved();
+
+    // Reload the full list from the server (or localStorage) to refresh savedAnalyses
+    const entries = await loadAnalysis();
+    setSavedAnalyses(entries);
+    setSelectedAnalysisIndex(entries.length - 1);
+    syncSavedRcaDataFromSelected();
+
     showToast('Guardado correctamente.', 'success');
 
-    // Clear everything silently (DOM + state) and start fresh
+    // Clear the wizard completely — start fresh
     await clearAll(true);
-
-    // Restore rcaData so the data table / review drawer can show the saved data,
-    // while the wizard forms stay clean
-    setRcaData(savedData);
   } catch (err) {
     handleError(err, 'guardar el análisis');
   }
@@ -262,28 +240,22 @@ async function clearAll(skipConfirm = false): Promise<void> {
   if (resumenProblema) resumenProblema.textContent = 'No definido';
   if (resumenCausa) resumenCausa.textContent = 'No definida';
 
-  renderWhysWizard();
   updateIshikawaGenerateBtn();
 
-  // Lock all tabs visually and reset step indicators (rcaData is preserved for the table view)
-  const allStepIds = ['tab-captura', 'conn-0', 'tab-ishikawa', 'conn-1', 'tab-5whys', 'conn-2', 'tab-plan'];
-  allStepIds.forEach(id => {
+  // Reset stepper — remove all daisyUI step states and re-lock
+  const stepIds = ['tab-captura', 'tab-ishikawa', 'tab-5whys', 'tab-plan'];
+  stepIds.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.classList.remove('completed');
-  });
-  const lockedTabs = ['ishikawa', '5whys', 'plan'];
-  lockedTabs.forEach(tabName => {
-    const btn = document.getElementById(`tab-${tabName}`);
-    if (btn) {
-      btn.classList.add('tab-locked');
-      btn.onclick = null;
+    if (!el) return;
+    el.classList.remove('step-success', 'step-info', 'step-neutral', 'step-primary');
+    if (id !== 'tab-captura') {
+      el.classList.add('tab-locked');
+      el.style.opacity = '0.4';
+      el.style.pointerEvents = 'none';
+      el.onclick = null;
+    } else {
+      el.dataset.content = '1';
     }
-  });
-  const capturaBtn = document.getElementById('tab-captura');
-  if (capturaBtn) capturaBtn.classList.remove('tab-active');
-
-  document.querySelectorAll('.step-header-actions').forEach(el => {
-    el.classList.add('hidden');
   });
 
   setRcaData({
@@ -294,33 +266,40 @@ async function clearAll(skipConfirm = false): Promise<void> {
   });
   persistCurrentState();
 
+  // Render whys wizard AFTER resetting data so timeline shows empty
+  renderWhysWizard();
+
   localStorage.setItem('wizardCleared', 'true');
+
+  // When user invoked directly (not from saveAnalysis/deleteAnalysisFile),
+  // also delete the server file so old data doesn't reappear on refresh
+  if (!skipConfirm) {
+    try {
+      await deleteAnalysis();
+    } catch {
+      // Silently fail if file doesn't exist
+    }
+  }
 
   showTab('captura');
   updateClearAllButton();
 }
 
 /* ==========================================================================
-   Clear All from Table View (deletes file + resets rcaData, leaves wizard)
+   Clear All from Table View (deletes saved file only — does NOT touch wizard)
    ========================================================================== */
 
 async function clearAllFromTable(): Promise<void> {
   const confirmed = await confirmDanger(
-    'Se eliminará el archivo guardado y se limpiarán los datos de la tabla.',
-    '¿Limpiar todo?'
+    'Se eliminarán todos los análisis guardados.\n\nLos datos del wizard no se verán afectados.',
+    '¿Limpiar todos los análisis guardados?'
   );
   if (!confirmed) return;
 
-  const empty: RCAData = {
-    captura: {},
-    whys: { why1: '', why2: '', why3: '', why4: '', why5: '', wizardLevel: 1 },
-    ishikawa: {},
-    acciones: { correctivas: [], preventivas: [] }
-  };
-  setRcaData(empty);
-  setSavedRcaData(empty);
+  setSavedAnalyses([]);
+  setSelectedAnalysisIndex(-1);
+  syncSavedRcaDataFromSelected();
 
-  localStorage.removeItem('rcaData');
   localStorage.removeItem('wizardCleared');
 
   try {
@@ -494,7 +473,9 @@ window.addEventListener('DOMContentLoaded', function() {
       acciones: parsed.acciones || { correctivas: [], preventivas: [] }
     };
     setRcaData(restored);
-    setSavedRcaData(JSON.parse(JSON.stringify(restored)));
+    // NOTE: savedRcaData is intentionally NOT set here — it must only come
+    // from loadAnalysisFromJson() below (the blob file), so the "Todos los
+    // datos" table only shows explicitly saved/committed data.
 
     if (rcaData.captura.fecha?.length) {
       setDatepickerValue('fechaEvento-container', rcaData.captura.fecha);
@@ -582,7 +563,7 @@ window.addEventListener('DOMContentLoaded', function() {
   // Auto-load analysis JSON file if it exists
   loadAnalysisFromJson();
 
-  // Remove loading class to reveal content after everything is initialized and painted
+  // Remove loading class to reveal content after initialization
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       document.body.classList.remove('loading');
@@ -597,78 +578,26 @@ window.addEventListener('DOMContentLoaded', function() {
 async function loadAnalysisFromJson(): Promise<void> {
   try {
     const result = await checkAnalysisFile();
-    if (!result.exists) return;
-
-    const record = await loadAnalysis();
-    if (!record.data) return;
-
-    // Restore data to state and DOM
-    const data = record.data;
-    const rawFecha = data.captura?.fecha;
-    const restoredFecha: string[] | undefined = Array.isArray(rawFecha) ? rawFecha : (rawFecha ? [rawFecha] : undefined);
-    const restored: RCAData = {
-      captura: { ...(data.captura || {}), fecha: restoredFecha },
-      whys: {
-        why1: data.whys?.why1 || '',
-        why2: data.whys?.why2 || '',
-        why3: data.whys?.why3 || '',
-        why4: data.whys?.why4 || '',
-        why5: data.whys?.why5 || '',
-        wizardLevel: data.whys?.wizardLevel ?? 1,
-        causaRaiz: data.whys?.causaRaiz
-      },
-      ishikawa: data.ishikawa || {},
-      acciones: data.acciones || { correctivas: [], preventivas: [] }
-    };
-    setRcaData(restored);
-    setSavedRcaData(JSON.parse(JSON.stringify(restored)));
-
-    const wizardCleared = localStorage.getItem('wizardCleared') === 'true';
-    localStorage.removeItem('wizardCleared');
-
-    if (!wizardCleared) {
-      const cap = rcaData.captura;
-      if (cap.fecha?.length) {
-        setDatepickerValue('fechaEvento-container', cap.fecha);
-      }
-      const maqEl = document.getElementById('maquina') as HTMLSelectElement | null;
-      if (maqEl && cap.maquina) maqEl.value = cap.maquina;
-      const tpEl = document.getElementById('tiempoParo') as HTMLInputElement | null;
-      if (tpEl && cap.tiempoParo) tpEl.value = cap.tiempoParo;
-      const probEl = document.getElementById('descripcionProblema') as HTMLTextAreaElement | null;
-      if (probEl && cap.problema) probEl.value = cap.problema;
-      const sintEl = document.getElementById('sintomas') as HTMLTextAreaElement | null;
-      if (sintEl && cap.sintomas) sintEl.value = cap.sintomas;
-      const respEl = document.getElementById('responsable') as HTMLInputElement | null;
-      if (respEl && cap.responsable) respEl.value = cap.responsable;
-
-      CATEGORY_ORDER.forEach(cat => {
-        if (rcaData.ishikawa[cat]) {
-          const el = document.getElementById(`ishikawa-${cat}`) as HTMLTextAreaElement | null;
-          if (el) el.value = rcaData.ishikawa[cat]!;
-        }
-      });
-      refreshIshikawaDiagram();
-      updateIshikawaGenerateBtn();
-
-      if (rcaData.acciones.correctivas.length > 0) {
-        rcaData.acciones.correctivas.forEach((accion, index) => {
-          addAccionToDOM('correctiva', accion, index);
-        });
-      }
-      if (rcaData.acciones.preventivas.length > 0) {
-        rcaData.acciones.preventivas.forEach((accion, index) => {
-          addAccionToDOM('preventiva', accion, index);
-        });
-      }
-
-      updateTabLockState();
-      updateClearAllButton();
-      syncPlanFromAnalysis();
-      renderWhysWizard();
+    if (!result.exists) {
+      setSavedAnalyses([]);
+      setSelectedAnalysisIndex(-1);
+      syncSavedRcaDataFromSelected();
+      return;
     }
+
+    const entries = await loadAnalysis();
+    setSavedAnalyses(entries);
+
+    // Select the latest analysis
+    if (entries.length > 0) {
+      setSelectedAnalysisIndex(entries.length - 1);
+    }
+    syncSavedRcaDataFromSelected();
   } catch {
     logWarn('loadAnalysis', 'No se pudo cargar el archivo guardado — iniciando fresco.');
+    setSavedAnalyses([]);
+    setSelectedAnalysisIndex(-1);
+    syncSavedRcaDataFromSelected();
   }
 }
 

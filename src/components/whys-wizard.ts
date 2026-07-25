@@ -83,11 +83,10 @@ export function renderWhysWizard(): void {
   }
 
   const count = getTimelineCount(whys, level);
-  if (count === 0) {
-    document.getElementById('whys-timeline-body')?.classList.add('whys-timeline-collapsed');
-    const chevron = document.getElementById('whys-timeline-chevron');
-    if (chevron) chevron.style.transform = 'rotate(-90deg)';
-  }
+  // Always show timeline open by default — remove collapsed class
+  document.getElementById('whys-timeline-body')?.classList.remove('whys-timeline-collapsed');
+  const chevron = document.getElementById('whys-timeline-chevron');
+  if (chevron) chevron.style.transform = '';
 
   updateRootCauseSummary();
 }
@@ -137,7 +136,7 @@ function renderWhyActive(level: number, value: string): void {
         <div class="w-8 h-8 ${color.bg} text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">${level}</div>
         <label class="font-semibold ${color.label}" for="why-active-input">${escapeHtml(WHY_LABELS[level])}</label>
       </div>
-      <input type="text" id="why-active-input" class="std-input" placeholder="${escapeHtml(WHY_PLACEHOLDERS[level])}" value="${escapeHtml(value)}" autofocus>
+      <input type="text" id="why-active-input" class="input input-bordered w-full" placeholder="${escapeHtml(WHY_PLACEHOLDERS[level])}" value="${escapeHtml(value)}" autofocus>
     </div>
   `;
 

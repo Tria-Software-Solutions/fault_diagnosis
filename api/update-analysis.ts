@@ -12,20 +12,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const meta = await head(BLOB_FILENAME);
-    if (!meta) return res.status(200).json({ blobUnavailable: true, error: 'Analysis not found' });
+    if (!meta) return res.status(200).json({ analyses: [] });
 
-    const record = {
-      id: 'analisis',
-      savedAt: new Date().toISOString(),
-      data: req.body.data || req.body,
-    };
-    await put(BLOB_FILENAME, JSON.stringify(record), {
+    const resp = await fetch(meta.downloadUrl, {
+      headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    });
+    const record = await resp.json();
+    let analyses = record.analyses || (record.data ? [record] : []);
+
+    // Expects { analyses: AnalysisEntry[] } — replaces the full list
+    analyses = req.body.analyses || analyses;
+
+    await put(BLOB_FILENAME, JSON.stringify({ analyses }), {
       contentType: 'application/json',
       access: 'private',
       addRandomSuffix: false,
       allowOverwrite: true,
     });
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, count: analyses.length });
   } catch {
     res.status(200).json({ blobUnavailable: true });
   }

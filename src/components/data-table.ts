@@ -1,9 +1,11 @@
-import { buildSectionRows, setEditingKey, getEditingKey, rcaData, savedRcaData, setSavedRcaData, removeActionFromState, persistCurrentState, DATA_SECTIONS, serializeDates, parseDates, type DataSection, type RCAWhys, type RCAIshikawa } from '../state/store';
+import { buildSectionRows, setEditingKey, getEditingKey, rcaData, savedRcaData, savedAnalyses, selectedAnalysisIndex, setSavedRcaData, setSavedAnalyses, setSelectedAnalysisIndex, syncSavedRcaDataFromSelected, removeActionFromState, persistCurrentState, DATA_SECTIONS, serializeDates, parseDates, formatDate, ISHIKAWA_CATEGORY_CONFIG, type DataSection } from '../state/store';
+import { escapeHtml, formatDateDDMMYYYY } from '../utils/text';
 import { confirmAction } from '../utils/confirm';
 import { showToast } from '../utils/toast';
+import { generateIshikawaPreview } from './ishikawa';
 import { closeReviewDrawer, renderDrawerTable } from './drawer';
 import { addAccionToDOM } from './plan';
-import { updateAnalysisFile } from '../services/analysisStorage';
+import { updateEntryById } from '../services/analysisStorage';
 
 /* ==========================================================================
    Full Data Table View Component — Section Tabs
@@ -11,6 +13,10 @@ import { updateAnalysisFile } from '../services/analysisStorage';
 
 let previousTab: string | null = null;
 let currentDataTab: DataSection = 'captura';
+
+// Filter state for Mes-Año + Máquina
+let filterMonth = '';
+let filterMachine = '';
 
 /** Opens or closes the data table view */
 export function toggleTableView(): void {
@@ -35,27 +41,31 @@ export function openTableView(): void {
   const tabla = document.getElementById('content-tabla');
   if (tabla) tabla.classList.remove('hidden');
   currentDataTab = 'captura';
-  renderToolbar();
   renderDataTable();
   updateSubtabUI();
+  updateSubtabDisabled();
   const fab = document.getElementById('fab');
   if (fab) fab.classList.add('hidden');
-  // Hide stepper and bottom nav for more space
+  // Hide stepper, show simplified nav in footer
   const stepper = document.querySelector('.stepper-wrap') as HTMLElement | null;
-  const stepNav = document.getElementById('step-nav') as HTMLElement | null;
+  const wizardView = document.getElementById('step-nav-wizard-view') as HTMLElement | null;
+  const tableView = document.getElementById('step-nav-table-view') as HTMLElement | null;
   if (stepper) stepper.style.display = 'none';
-  if (stepNav) stepNav.style.display = 'none';
+  if (wizardView) wizardView.classList.add('hidden');
+  if (tableView) tableView.classList.remove('hidden');
 }
 
 /** Closes the data table view and returns to previous tab */
 export function closeTableView(): void {
   const tabla = document.getElementById('content-tabla');
   if (tabla) tabla.classList.add('hidden');
-  // Restore stepper and bottom nav
+  // Restore stepper and wizard nav
   const stepper = document.querySelector('.stepper-wrap') as HTMLElement | null;
-  const stepNav = document.getElementById('step-nav') as HTMLElement | null;
+  const wizardView = document.getElementById('step-nav-wizard-view') as HTMLElement | null;
+  const tableView = document.getElementById('step-nav-table-view') as HTMLElement | null;
   if (stepper) stepper.style.display = '';
-  if (stepNav) stepNav.style.display = '';
+  if (wizardView) wizardView.classList.remove('hidden');
+  if (tableView) tableView.classList.add('hidden');
   if (previousTab && previousTab !== 'tabla') {
     window.__showTab(previousTab);
   } else {
@@ -65,53 +75,254 @@ export function closeTableView(): void {
 
 /** Switch sub-tab within the data table */
 export function switchDataTab(section: DataSection): void {
+  if (savedAnalyses.length === 0) return; // No data, can't switch
   currentDataTab = section;
   renderDataTable();
   updateSubtabUI();
 }
 
-/** Updates the sub-tab button active states */
+/** Updates the sub-tab button active states (daisyUI tabs-box) */
 function updateSubtabUI(): void {
-  document.querySelectorAll('.data-subtab').forEach(btn => {
+  document.querySelectorAll('[role="tablist"] .tab').forEach(btn => {
     const section = btn.getAttribute('data-section');
-    btn.classList.toggle('active', section === currentDataTab);
+    btn.classList.toggle('tab-active', section === currentDataTab);
   });
 }
 
-/** Renders the sticky toolbar with export/clear actions */
-export function renderToolbar(): void {
-  const toolbar = document.getElementById('data-table-toolbar');
-  if (!toolbar) return;
-  toolbar.innerHTML = `
-    <div class="toolbar-group">
-      <span class="toolbar-label">Exportar</span>
-      <button class="toolbar-btn" onclick="window.__handlePDFExport()" title="Exportar PDF">
-        <i class="fas fa-file-pdf"></i>
-        <span>PDF</span>
-      </button>
-      <button class="toolbar-btn" onclick="window.__exportExcel()" title="Exportar Excel">
-        <i class="fas fa-file-excel"></i>
-        <span>Excel</span>
-      </button>
-    </div>
-    <div class="toolbar-divider"></div>
-    <div class="toolbar-group">
-      <button class="toolbar-btn toolbar-btn-danger" onclick="window.__clearAllFromTable()" title="Limpiar todo">
-        <i class="fas fa-trash-alt"></i>
-        <span>Limpiar Todo</span>
-      </button>
-    </div>
-  `;
+/** Disables or enables sub-tab buttons based on whether saved data exists */
+function updateSubtabDisabled(): void {
+  const hasData = savedAnalyses.length > 0;
+  document.querySelectorAll('[role="tablist"] .tab').forEach(btn => {
+    btn.classList.toggle('tab-disabled', !hasData);
+    btn.classList.toggle('pointer-events-none', !hasData);
+    btn.classList.toggle('opacity-40', !hasData);
+  });
 }
 
-/** Renders the current sub-tab's section table from the loaded JSON data */
+/** Renders the selected analysis info bar + export actions below the filter list */
+function renderSelectedAnalysisBar(): void {
+  const container = document.getElementById('selected-analysis-bar');
+  if (!container) return;
+
+  if (savedAnalyses.length === 0 || selectedAnalysisIndex < 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const entry = savedAnalyses[selectedAnalysisIndex];
+  if (!entry) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const data = entry.data;
+  const maquina = data.captura?.maquina || 'Sin máquina';
+  const problema = data.captura?.problema || 'Sin problema';
+  const shortDate = formatDate(data.captura?.fecha);
+  const indicador = data.captura?.indicador || '';
+  const hasData = savedAnalyses.length > 0;
+  const disabledClass = hasData ? '' : ' btn-disabled opacity-50 pointer-events-none';
+
+  container.innerHTML = `<div class="selected-analysis-bar">
+    <div class="selected-analysis-info">
+      <i class="fas fa-cube text-blue-500"></i>
+      <span class="selected-machine font-semibold">${escapeHtml(maquina)}</span>
+      <span class="selected-sep">•</span>
+      <span class="selected-problem">${escapeHtml(problema.substring(0, 60))}</span>
+      ${indicador ? `<span class="selected-sep">•</span><span class="selected-indicator">${escapeHtml(indicador)}</span>` : ''}
+      <span class="selected-sep">•</span>
+      <span class="selected-date">${escapeHtml(shortDate)}</span>
+    </div>
+    <div class="selected-analysis-actions">
+      <button class="btn btn-ghost btn-xs gap-1${disabledClass}" onclick="window.__exportFullPDF()" title="${hasData ? 'Exportar todos en PDF' : 'No hay datos'}">
+        <i class="fas fa-file-pdf text-red-500"></i>
+        <span>PDF</span>
+      </button>
+      <button class="btn btn-ghost btn-xs gap-1${disabledClass}" onclick="window.__exportFullExcel()" title="${hasData ? 'Exportar todos en Excel' : 'No hay datos'}">
+        <i class="fas fa-file-excel text-green-600"></i>
+        <span>Excel</span>
+      </button>
+      <div class="selected-actions-divider"></div>
+      <button class="btn btn-ghost btn-xs gap-1 text-red-500 hover:bg-red-50" onclick="window.__deleteCurrentAnalysis()" title="Eliminar este análisis">
+        <i class="fas fa-trash-alt"></i>
+        <span>Eliminar</span>
+      </button>
+    </div>
+  </div>`;
+}
+
+/** Renders the filter bar (Mes-Año + Máquina) and a selectable list of analyses */
+function renderAnalysisFilters(): void {
+  const container = document.getElementById('analysis-filters');
+  if (!container) return;
+
+  const entries = savedAnalyses;
+  if (entries.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Extract unique months and machines
+  const months = new Set<string>();
+  const machines = new Set<string>();
+  entries.forEach(entry => {
+    const fechaAnalisis = entry.data.captura?.fecha?.[0];
+    if (fechaAnalisis) {
+      const m = fechaAnalisis.substring(0, 7);
+      months.add(m);
+    }
+    const mq = entry.data.captura?.maquina?.trim();
+    if (mq) machines.add(mq);
+  });
+
+  const sortedMonths = Array.from(months).sort().reverse();
+  const sortedMachines = Array.from(machines).sort();
+
+  // Filter entries based on current filter state
+  const filtered = entries.filter(entry => {
+    const fechaAnalisis = entry.data.captura?.fecha?.[0] || '';
+    if (filterMonth && fechaAnalisis.substring(0, 7) !== filterMonth) return false;
+    if (filterMachine && entry.data.captura?.maquina?.trim() !== filterMachine) return false;
+    return true;
+  });
+
+  // Month name helper
+  const monthName = (ym: string): string => {
+    const [y, m] = ym.split('-');
+    const names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    return `${names[parseInt(m, 10) - 1]} ${y}`;
+  };
+
+  const monthOpts = `<option value="">Todos los meses</option>` +
+    sortedMonths.map(m => `<option value="${m}" ${m === filterMonth ? 'selected' : ''}>${escapeHtml(monthName(m))}</option>`).join('');
+
+  const machineOpts = `<option value="">Todas las máquinas</option>` +
+    sortedMachines.map(m => `<option value="${escapeHtml(m)}" ${m === filterMachine ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+
+  container.innerHTML = `<div class="analysis-filters-bar">
+    <div class="filter-group">
+      <label class="filter-label"><i class="fas fa-calendar-alt"></i> Mes-Año</label>
+      <select class="select select-bordered select-sm" onchange="window.__setFilterMonth(this.value)">
+        ${monthOpts}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label"><i class="fas fa-industry"></i> Máquina</label>
+      <select class="select select-bordered select-sm" onchange="window.__setFilterMachine(this.value)">
+        ${machineOpts}
+      </select>
+    </div>
+    <div class="filter-count">
+      <span class="badge badge-ghost badge-sm">${filtered.length} de ${entries.length}</span>
+    </div>
+  </div>`;
+
+  // Also render the selected analysis bar below
+  renderSelectedAnalysisBar();
+}
+
+/** Selects an analysis by index and refreshes the view */
+window.__selectAnalysis = function(idx: number): void {
+  setSelectedAnalysisIndex(idx);
+  syncSavedRcaDataFromSelected();
+  renderAnalysisFilters();
+  renderDataTable();
+};
+
+/** Re-evaluates filter + auto-selects first visible if current selection is out of filter */
+function applyFilterAndSync(): void {
+  const entries = savedAnalyses;
+  const filtered = entries.filter(entry => {
+    const fechaAnalisis = entry.data.captura?.fecha?.[0] || '';
+    if (filterMonth && fechaAnalisis.substring(0, 7) !== filterMonth) return false;
+    if (filterMachine && entry.data.captura?.maquina?.trim() !== filterMachine) return false;
+    return true;
+  });
+
+  // Only auto-select if the current selection is no longer in the filtered set
+  const currentStillVisible = selectedAnalysisIndex >= 0 && filtered.some(e => entries.indexOf(e) === selectedAnalysisIndex);
+  if (filtered.length > 0 && !currentStillVisible) {
+    const idx = entries.indexOf(filtered[0]);
+    if (idx !== selectedAnalysisIndex) {
+      setSelectedAnalysisIndex(idx);
+      syncSavedRcaDataFromSelected();
+      renderDataTable();
+    }
+  }
+}
+
+/** Sets the month filter and refreshes the list */
+window.__setFilterMonth = function(val: string): void {
+  filterMonth = val;
+  renderAnalysisFilters();
+  applyFilterAndSync();
+};
+
+/** Sets the machine filter and refreshes the list */
+window.__setFilterMachine = function(val: string): void {
+  filterMachine = val;
+  renderAnalysisFilters();
+  applyFilterAndSync();
+};
+
+/** Renders the current sub-tab's section table from the selected analysis data */
 export function renderDataTable(): void {
   const container = document.getElementById('data-table-body');
   if (!container) return;
 
-  const sectionHtml = buildSectionRows(currentDataTab, savedRcaData);
+  renderAnalysisFilters();
+  updateSubtabDisabled();
 
-  container.innerHTML = `<div class="data-section-block">${sectionHtml}</div>`;
+  const data = savedRcaData;
+  const hasAnyData = data.captura?.problema || Object.values(data.ishikawa || {}).some(v => v);
+
+  if (!hasAnyData && savedAnalyses.length === 0) {
+    container.innerHTML = `<div class="text-center py-8 text-gray-400">
+      <i class="fas fa-database text-3xl mb-3 block"></i>
+      <p>No hay análisis guardados.</p>
+      <p class="text-xs">Completa el wizard y guarda para ver los datos aquí.</p>
+    </div>`;
+    return;
+  }
+
+  const sectionHtml = buildSectionRows(currentDataTab, data);
+
+  // Build extra content based on section
+  let extraHtml = '';
+  if (currentDataTab === 'ishikawa') {
+    const preview = generateIshikawaPreview(
+      data.ishikawa || {},
+      data.captura?.problema || ''
+    );
+    if (!preview.isEmpty) {
+      extraHtml = `<div class="data-table-ishikawa-preview">
+        <div class="ishikawa-preview-header">
+          <span><i class="fas fa-project-diagram text-blue-600 mr-1"></i> Diagrama de Ishikawa</span>
+        </div>
+        <div class="ishikawa-preview-body">
+          <div class="ishikawa-preview-svg-wrap">
+            <svg viewBox="${preview.viewBox}" xmlns="http://www.w3.org/2000/svg" class="ishikawa-preview-svg">
+              ${preview.svgContent}
+            </svg>
+          </div>
+        </div>
+      </div>`;
+    } else {
+      extraHtml = `<div class="data-table-ishikawa-preview">
+        <div class="ishikawa-preview-header">
+          <span><i class="fas fa-project-diagram text-blue-600 mr-1"></i> Diagrama de Ishikawa</span>
+        </div>
+        <div class="ishikawa-preview-body">
+          <div class="ishikawa-preview-empty">
+            <i class="fas fa-project-diagram"></i>
+            <span>No hay datos de Ishikawa disponibles</span>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
+  container.innerHTML = `<div class="data-section-block">${sectionHtml}</div>${extraHtml}`;
 
   if (getEditingKey()) {
     requestAnimationFrame(() => {
@@ -121,12 +332,51 @@ export function renderDataTable(): void {
   }
 }
 
-/** Auto-syncs the current data to the saved file */
+/** Deletes the currently selected analysis from the saved list */
+window.__deleteCurrentAnalysis = async function(): Promise<void> {
+  if (selectedAnalysisIndex < 0 || selectedAnalysisIndex >= savedAnalyses.length) return;
+  const confirmed = await confirmAction('¿Eliminar este análisis permanentemente?');
+  if (!confirmed) return;
+
+  const entryId = savedAnalyses[selectedAnalysisIndex].id;
+  const { deleteAnalysisById } = await import('../services/analysisStorage');
+  await deleteAnalysisById(entryId);
+
+  // Refresh from the server
+  const { loadAnalysis } = await import('../services/analysisStorage');
+  const entries = await loadAnalysis();
+  setSavedAnalyses(entries);
+
+  if (entries.length > 0) {
+    setSelectedAnalysisIndex(0);
+  } else {
+    setSelectedAnalysisIndex(-1);
+  }
+  syncSavedRcaDataFromSelected();
+  renderDataTable();
+  showToast('Análisis eliminado.', 'success');
+};
+
+/** Needed by the analysis filters */
+declare global {
+  interface Window {
+    __selectAnalysis: (idx: number) => void;
+    __setFilterMonth: (val: string) => void;
+    __setFilterMachine: (val: string) => void;
+    __deleteCurrentAnalysis: () => Promise<void>;
+  }
+}
+
+
+/** Auto-syncs the current edit to the saved file */
 function tryAutoSyncFile(): void {
   (async () => {
     try {
       persistCurrentState();
-      await updateAnalysisFile(savedRcaData);
+      const entry = savedAnalyses[selectedAnalysisIndex];
+      if (entry) {
+        await updateEntryById(entry.id, savedRcaData);
+      }
     } catch {
       showToast('No se pudo sincronizar el archivo guardado.', 'warning');
     }
@@ -191,6 +441,13 @@ export async function deleteField(
   renderDrawerTable();
   // Auto-sync to saved file
   tryAutoSyncFile();
+}
+
+/** Syncs savedRcaData changes back to the savedAnalyses array */
+function syncEditToArray(): void {
+  if (selectedAnalysisIndex >= 0 && selectedAnalysisIndex < savedAnalyses.length) {
+    savedAnalyses[selectedAnalysisIndex].data = JSON.parse(JSON.stringify(savedRcaData));
+  }
 }
 
 /** Applies a change to rcaData, savedRcaData, and the DOM */
@@ -272,6 +529,8 @@ function applyFieldEdit(key: string, value: string): void {
     }
     savedRcaData.acciones = savedAcciones;
   }
+  // Sync back to savedAnalyses array
+  syncEditToArray();
 }
 
 /** Deletes a single action row from the Plan section */
@@ -300,6 +559,7 @@ export async function deletePlanRow(
     });
   }
 
+  syncEditToArray();
   setEditingKey(null);
   persist();
   renderDataTable();
@@ -355,6 +615,7 @@ export async function deleteSection(
     if (prevContainer) prevContainer.innerHTML = '';
   }
 
+  syncEditToArray();
   setEditingKey(null);
   persist();
   if (section === '5whys') renderWhysWizard();
@@ -364,6 +625,26 @@ export async function deleteSection(
   tryAutoSyncFile();
 }
 
+/** Exports a single row/section as a compact PDF */
+window.__exportRowPDF = async function(section: string, tipo?: string, index?: number): Promise<void> {
+  const { exportSingleRowPDF } = await import('../services/exportPDF');
+  try {
+    await exportSingleRowPDF(section, tipo, index);
+  } catch (err) {
+    console.error('Error exporting row PDF:', err);
+  }
+};
+
+/** Exports a single row/section as a compact Excel */
+window.__exportRowExcel = async function(section: string, tipo?: string, index?: number): Promise<void> {
+  const { exportSingleRowExcel } = await import('../services/exportExcel');
+  try {
+    await exportSingleRowExcel(section, tipo, index);
+  } catch (err) {
+    console.error('Error exporting row Excel:', err);
+  }
+};
+
 /** Needed by drawer close buttons */
 declare global {
   interface Window {
@@ -371,5 +652,7 @@ declare global {
     __closeTableView: () => void;
     __showTab: (name: string) => void;
     __switchDataTab: (section: string) => void;
+    __exportRowPDF: (section: string, tipo?: string, index?: number) => Promise<void>;
+    __exportRowExcel: (section: string, tipo?: string, index?: number) => Promise<void>;
   }
 }

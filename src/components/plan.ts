@@ -22,23 +22,23 @@ function buildAccionHTML(tipo: string, index: number, accion: Partial<Accion> = 
         <div class="sm:col-span-3">
           <label class="std-label" for="accion-${tipo}-${index}-desc">Descripción</label>
           <input type="text" id="accion-${tipo}-${index}-desc" value="${descripcion}"
-                 class="std-input"
+                 class="input input-bordered w-full"
                  placeholder="Describe la acción...">
         </div>
         <div>
           <label class="std-label" for="accion-${tipo}-${index}-resp">Responsable</label>
           <input type="text" id="accion-${tipo}-${index}-resp" value="${responsable}"
-                 class="std-input"
+                 class="input input-bordered w-full"
                  placeholder="Nombre del responsable...">
         </div>
         <div>
           <label class="std-label" for="accion-${tipo}-${index}-fecha">Fecha límite</label>
           <input type="date" id="accion-${tipo}-${index}-fecha" value="${fecha}"
-                 class="std-input">
+                 class="input input-bordered w-full">
         </div>
         <div class="select-wrapper">
           <label class="std-label" for="accion-${tipo}-${index}-prio">Prioridad</label>
-          <select id="accion-${tipo}-${index}-prio" class="std-input">
+          <select id="accion-${tipo}-${index}-prio" class="select select-bordered w-full">
             <option value="alta" ${prioridad === 'alta' ? 'selected' : ''}>Alta</option>
             <option value="media" ${prioridad === 'media' ? 'selected' : ''}>Media</option>
             <option value="baja" ${prioridad === 'baja' ? 'selected' : ''}>Baja</option>

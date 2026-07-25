@@ -6,8 +6,13 @@
   <title>Herramienta de Diagnóstico de Fallas</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
-    /* FOUC Prevention: hide everything until JS removes .loading */
-    body.loading, body.loading * {
+    /* FOUC Prevention: hide page content until JS removes .loading */
+    body.loading header,
+    body.loading .stepper-wrap,
+    body.loading .main-content,
+    body.loading #review-drawer,
+    body.loading #drawer-overlay,
+    body.loading #step-nav {
       visibility: hidden !important;
       opacity: 0 !important;
       pointer-events: none !important;
@@ -30,58 +35,25 @@
         <h1 class="header-title">Herramienta de Diagnóstico de Fallas</h1>
         <p class="header-subtitle">Identifica y soluciona problemas de raíz</p>
       </div>
-      <div class="header-actions">
-        <button onclick="window.__toggleTableView()" class="header-btn header-btn-table" title="Ver todos los datos en tabla">
-          <i class="fas fa-th"></i>
-          <span>Todos los datos</span>
-        </button>
-      </div>
     </div>
   </header>
 
   <!-- Progress Stepper -->
   <div class="stepper-wrap">
-    <div class="stepper">
-      <div class="step-item active" id="tab-captura" onclick="window.__showTab('captura')">
-        <div class="step-indicator">
-          <span class="step-num">1</span>
-          <i class="fas fa-check step-check"></i>
-        </div>
-        <div class="step-labels">
-          <span class="step-label">Captura</span>
-        </div>
-      </div>
-      <div class="step-connector" id="conn-0"></div>
-      <div class="step-item tab-locked" id="tab-ishikawa" onclick="window.__showTab('ishikawa')">
-        <div class="step-indicator">
-          <span class="step-num">2</span>
-          <i class="fas fa-check step-check"></i>
-        </div>
-        <div class="step-labels">
-          <span class="step-label">Ishikawa</span>
-        </div>
-      </div>
-      <div class="step-connector" id="conn-1"></div>
-      <div class="step-item tab-locked" id="tab-5whys" onclick="window.__showTab('5whys')">
-        <div class="step-indicator">
-          <span class="step-num">3</span>
-          <i class="fas fa-check step-check"></i>
-        </div>
-        <div class="step-labels">
-          <span class="step-label">5 Porqués</span>
-        </div>
-      </div>
-      <div class="step-connector" id="conn-2"></div>
-      <div class="step-item tab-locked" id="tab-plan" onclick="window.__showTab('plan')">
-        <div class="step-indicator">
-          <span class="step-num">4</span>
-          <i class="fas fa-check step-check"></i>
-        </div>
-        <div class="step-labels">
-          <span class="step-label">Plan</span>
-        </div>
-      </div>
-    </div>
+    <ul class="steps w-full max-w-lg mx-auto px-4 py-4 [&_.step]:text-center steps-center">
+      <li class="step step-info font-semibold cursor-pointer" id="tab-captura" onclick="window.__showTab('captura')" data-content="1">
+        Captura
+      </li>
+      <li class="step cursor-pointer" id="tab-ishikawa" onclick="window.__showTab('ishikawa')" data-content="2">
+        Ishikawa
+      </li>
+      <li class="step cursor-pointer" id="tab-5whys" onclick="window.__showTab('5whys')" data-content="3">
+        5 Porqués
+      </li>
+      <li class="step cursor-pointer" id="tab-plan" onclick="window.__showTab('plan')" data-content="4">
+        Plan
+      </li>
+    </ul>
   </div>
 
   <!-- Main Content -->
@@ -96,9 +68,6 @@
             <h2 class="step-title"><i class="fas fa-clipboard step-header-icon"></i>Captura del Problema</h2>
             <span class="step-subtitle">Completa todos los campos para registrar el evento y desbloquear los pasos siguientes</span>
           </div>
-          <div class="step-header-actions hidden">
-            <button onclick="window.__toggleReviewDrawer(event)" class="btn btn-sm btn-outline-success" title="Ver resumen del análisis"><i class="fas fa-file-lines"></i>Resumen</button>
-          </div>
         </div>
         <div class="step-body">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -108,7 +77,7 @@
             </div>
             <div class="select-wrapper">
               <label class="std-label" for="maquina">Máquina / Equipo</label>
-              <select id="maquina" class="std-input">
+              <select id="maquina" class="select select-bordered w-full">
                 <option value="">Seleccionar...</option>
                 <option value="Generadora 1">Generadora 1</option>
                 <option value="Generadora 2">Generadora 2</option>
@@ -123,7 +92,7 @@
             </div>
             <div>
               <label class="std-label" for="tiempoParo">Tiempo de paro (minutos)</label>
-              <input type="number" id="tiempoParo" min="0" placeholder="0" class="std-input">
+              <input type="number" id="tiempoParo" min="0" placeholder="0" class="input input-bordered w-full">
             </div>
             <div>
               <label class="std-label">Indicadores afectados</label>
@@ -145,15 +114,15 @@
             </div>
             <div class="sm:col-span-2">
               <label class="std-label" for="responsable">Responsable del análisis</label>
-              <input type="text" id="responsable" name="responsable" placeholder="Nombre del analista" class="std-input">
+              <input type="text" id="responsable" name="responsable" placeholder="Nombre del analista" class="input input-bordered w-full">
             </div>
             <div class="sm:col-span-2">
               <label class="std-label" for="descripcionProblema">Descripción del problema</label>
-              <textarea id="descripcionProblema" rows="4" placeholder="Describe detalladamente qué ocurrió..." class="std-textarea"></textarea>
+              <textarea id="descripcionProblema" rows="4" placeholder="Describe detalladamente qué ocurrió..." class="textarea textarea-bordered w-full"></textarea>
             </div>
             <div class="sm:col-span-2">
               <label class="std-label" for="sintomas">Síntomas observados</label>
-              <textarea id="sintomas" rows="3" placeholder="¿Qué se observó? ¿Ruidos, olores, vibraciones, alarmas?" class="std-textarea"></textarea>
+              <textarea id="sintomas" rows="3" placeholder="¿Qué se observó? ¿Ruidos, olores, vibraciones, alarmas?" class="textarea textarea-bordered w-full"></textarea>
             </div>
           </div>
         </div>
@@ -167,9 +136,6 @@
           <div class="step-title-group">
             <h2 class="step-title"><i class="fas fa-question-circle step-header-icon"></i>Los 5 Porqués</h2>
             <span class="step-subtitle">Pregunta "¿Por qué?" hasta la raíz — con una respuesta basta para empezar</span>
-          </div>
-          <div class="step-header-actions hidden">
-            <button onclick="window.__toggleReviewDrawer(event)" class="btn btn-sm btn-outline-success" title="Ver resumen del análisis"><i class="fas fa-file-lines"></i>Resumen</button>
           </div>
         </div>
         <div class="step-body">
@@ -207,9 +173,6 @@
             <h2 class="step-title"><i class="fas fa-project-diagram step-header-icon"></i>Diagrama de Ishikawa</h2>
             <span class="step-subtitle">Completa las 6 categorías para generar el diagrama de causa-efecto</span>
           </div>
-          <div class="step-header-actions hidden">
-            <button onclick="window.__toggleReviewDrawer(event)" class="btn btn-sm btn-outline-success" title="Ver resumen del análisis"><i class="fas fa-file-lines"></i>Resumen</button>
-          </div>
         </div>
         <div class="step-body">
           <p class="text-gray-500 mb-4 text-sm">
@@ -219,27 +182,27 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <div class="card-standard p-3 sm:p-4">
               <h3 class="card-section-title card-section-title--blue"><i class="fas fa-cog"></i>Máquina</h3>
-              <textarea id="ishikawa-maquina" rows="3" class="std-textarea" placeholder="Fallas en equipos, desgaste, mantenimiento..." autocomplete="off"></textarea>
+              <textarea id="ishikawa-maquina" rows="3" class="textarea textarea-bordered w-full" placeholder="Fallas en equipos, desgaste, mantenimiento..." autocomplete="off"></textarea>
             </div>
             <div class="card-standard p-3 sm:p-4">
               <h3 class="card-section-title card-section-title--indigo"><i class="fas fa-clipboard-list"></i>Método</h3>
-              <textarea id="ishikawa-metodo" rows="3" class="std-textarea" placeholder="Procedimientos, estándares, instrucciones..." autocomplete="off"></textarea>
+              <textarea id="ishikawa-metodo" rows="3" class="textarea textarea-bordered w-full" placeholder="Procedimientos, estándares, instrucciones..." autocomplete="off"></textarea>
             </div>
             <div class="card-standard p-3 sm:p-4">
               <h3 class="card-section-title card-section-title--purple"><i class="fas fa-box"></i>Materiales</h3>
-              <textarea id="ishikawa-materiales" rows="3" class="std-textarea" placeholder="Repuestos, consumibles, calidad..." autocomplete="off"></textarea>
+              <textarea id="ishikawa-materiales" rows="3" class="textarea textarea-bordered w-full" placeholder="Repuestos, consumibles, calidad..." autocomplete="off"></textarea>
             </div>
             <div class="card-standard p-3 sm:p-4">
               <h3 class="card-section-title card-section-title--pink"><i class="fas fa-users"></i>Mano de obra</h3>
-              <textarea id="ishikawa-manoObra" rows="3" class="std-textarea" placeholder="Capacitación, fatiga, errores..." autocomplete="off"></textarea>
+              <textarea id="ishikawa-manoObra" rows="3" class="textarea textarea-bordered w-full" placeholder="Capacitación, fatiga, errores..." autocomplete="off"></textarea>
             </div>
             <div class="card-standard p-3 sm:p-4">
               <h3 class="card-section-title card-section-title--orange"><i class="fas fa-chart-line"></i>Medición</h3>
-              <textarea id="ishikawa-medicion" rows="3" class="std-textarea" placeholder="Sensores, inspecciones, datos..." autocomplete="off"></textarea>
+              <textarea id="ishikawa-medicion" rows="3" class="textarea textarea-bordered w-full" placeholder="Sensores, inspecciones, datos..." autocomplete="off"></textarea>
             </div>
             <div class="card-standard p-3 sm:p-4">
               <h3 class="card-section-title card-section-title--green"><i class="fas fa-leaf"></i>Medio ambiente</h3>
-              <textarea id="ishikawa-medioAmbiente" rows="3" class="std-textarea" placeholder="Temperatura, humedad, condiciones..." autocomplete="off"></textarea>
+              <textarea id="ishikawa-medioAmbiente" rows="3" class="textarea textarea-bordered w-full" placeholder="Temperatura, humedad, condiciones..." autocomplete="off"></textarea>
             </div>
           </div>
 
@@ -258,20 +221,13 @@
           </div>
 
           <div id="ishikawa-diagram" class="ishikawa-svg-wrap mt-6 hidden">
-            <div class="ishikawa-diagram-header">
-              <span class="ishikawa-diagram-title"><i class="fas fa-project-diagram text-blue-600 mr-1"></i>Diagrama de Ishikawa</span>
-              <button class="ishikawa-fullscreen-btn" onclick="window.__viewIshikawaFullscreen()" title="Ver en grande">
-                <i class="fas fa-expand"></i>
-                <span>Ver en grande</span>
-              </button>
-            </div>
-            <svg viewBox="0 0 1000 460" xmlns="http://www.w3.org/2000/svg" class="ishikawa-svg">
+            <svg viewBox="0 0 1000 1020" xmlns="http://www.w3.org/2000/svg" class="ishikawa-svg">
               <defs>
                 <filter id="ish-shadow" x="-4" y="-4" width="140%" height="140%">
                   <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.08)"/>
                 </filter>
-                <filter id="ish-shadow-active" x="-4" y="-4" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(37,99,235,0.15)"/>
+                <filter id="ish-shadow-box" x="-4" y="-4" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(37,99,235,0.12)"/>
                 </filter>
                 <linearGradient id="ish-problem-grad" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stop-color="#1e3a5f"/>
@@ -281,77 +237,78 @@
                   <polygon points="0 0, 10 3.5, 0 7" fill="#1e3a5f"/>
                 </marker>
               </defs>
+              <!-- Background card -->
+              <rect x="10" y="10" width="980" height="1000" rx="16" fill="white" opacity="0.5"/>
               <!-- Spine Tail (fish tail) -->
-              <path d="M 85 230 L 40 185 L 40 275 Z" fill="#1e3a5f" opacity="0.85"/>
-              <line x1="85" y1="230" x2="40" y2="275" stroke="#1e3a5f" stroke-width="3" stroke-linecap="round"/>
-              <line x1="85" y1="230" x2="40" y2="185" stroke="#1e3a5f" stroke-width="3" stroke-linecap="round"/>
-              <!-- Spine (thicker central backbone) -->
-              <line x1="85" y1="230" x2="762" y2="230" stroke="#1e3a5f" stroke-width="5" stroke-linecap="round" marker-end="url(#ish-arrow)"/>
-              <!-- Spine accent line for depth -->
-              <line x1="85" y1="229" x2="762" y2="229" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+              <path d="M 85 460 L 40 410 L 40 510 Z" fill="#1e3a5f" opacity="0.85"/>
+              <line x1="85" y1="460" x2="40" y2="510" stroke="#1e3a5f" stroke-width="3" stroke-linecap="round"/>
+              <line x1="85" y1="460" x2="40" y2="410" stroke="#1e3a5f" stroke-width="3" stroke-linecap="round"/>
+              <!-- Spine (central backbone) -->
+              <line x1="85" y1="460" x2="762" y2="460" stroke="#1e3a5f" stroke-width="5" stroke-linecap="round" marker-end="url(#ish-arrow)"/>
+              <line x1="85" y1="459" x2="762" y2="459" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
               <!-- Spine contact marks -->
-              <line x1="205" y1="222" x2="205" y2="238" stroke="#1e3a5f" stroke-width="2"/>
-              <line x1="400" y1="222" x2="400" y2="238" stroke="#1e3a5f" stroke-width="2"/>
-              <line x1="595" y1="222" x2="595" y2="238" stroke="#1e3a5f" stroke-width="2"/>
+              <line x1="205" y1="452" x2="205" y2="468" stroke="#1e3a5f" stroke-width="2"/>
+              <line x1="400" y1="452" x2="400" y2="468" stroke="#1e3a5f" stroke-width="2"/>
+              <line x1="595" y1="452" x2="595" y2="468" stroke="#1e3a5f" stroke-width="2"/>
               <!-- Upper bones (ribs) -->
-              <line id="ishikawa-branch-maquina" x1="115" y1="142" x2="205" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line id="ishikawa-branch-metodo" x1="310" y1="142" x2="400" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line id="ishikawa-branch-materiales" x1="505" y1="142" x2="595" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+              <line id="ishikawa-branch-maquina" x1="115" y1="246" x2="205" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+              <line id="ishikawa-branch-metodo" x1="310" y1="246" x2="400" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+              <line id="ishikawa-branch-materiales" x1="505" y1="246" x2="595" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
               <!-- Lower bones (ribs) -->
-              <line x1="115" y1="318" x2="205" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line x1="310" y1="318" x2="400" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line x1="505" y1="318" x2="595" y2="230" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+              <line x1="115" y1="674" x2="205" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+              <line x1="310" y1="674" x2="400" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
+              <line x1="505" y1="674" x2="595" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
               <g id="ishikawa-label-maquina" class="ish-label-group" onclick="window.__editCategory('maquina')">
-                <foreignObject x="40" y="55" width="150" height="24">
+                <foreignObject x="35" y="48" width="170" height="24">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-cog"></i> Máquina</div>
                 </foreignObject>
-                <foreignObject x="40" y="80" width="150" height="50">
+                <foreignObject x="35" y="72" width="170" height="160">
                   <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-maquina" class="ish-bone-content"></div>
                 </foreignObject>
               </g>
               <g id="ishikawa-label-metodo" class="ish-label-group" onclick="window.__editCategory('metodo')">
-                <foreignObject x="235" y="55" width="150" height="24">
+                <foreignObject x="230" y="48" width="170" height="24">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-clipboard-list"></i> Método</div>
                 </foreignObject>
-                <foreignObject x="235" y="80" width="150" height="50">
+                <foreignObject x="230" y="72" width="170" height="160">
                   <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-metodo" class="ish-bone-content"></div>
                 </foreignObject>
               </g>
               <g id="ishikawa-label-materiales" class="ish-label-group" onclick="window.__editCategory('materiales')">
-                <foreignObject x="430" y="55" width="150" height="24">
+                <foreignObject x="425" y="48" width="170" height="24">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-box"></i> Materiales</div>
                 </foreignObject>
-                <foreignObject x="430" y="80" width="150" height="50">
+                <foreignObject x="425" y="72" width="170" height="160">
                   <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-materiales" class="ish-bone-content"></div>
                 </foreignObject>
               </g>
               <g id="ishikawa-label-manoObra" class="ish-label-group" onclick="window.__editCategory('manoObra')">
-                <foreignObject x="40" y="330" width="150" height="24">
+                <foreignObject x="35" y="696" width="170" height="24">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-users"></i> Mano de obra</div>
                 </foreignObject>
-                <foreignObject x="40" y="358" width="150" height="50">
+                <foreignObject x="35" y="720" width="170" height="160">
                   <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-manoObra" class="ish-bone-content"></div>
                 </foreignObject>
               </g>
               <g id="ishikawa-label-medicion" class="ish-label-group" onclick="window.__editCategory('medicion')">
-                <foreignObject x="235" y="330" width="150" height="24">
+                <foreignObject x="230" y="696" width="170" height="24">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-chart-line"></i> Medición</div>
                 </foreignObject>
-                <foreignObject x="235" y="358" width="150" height="50">
+                <foreignObject x="230" y="720" width="170" height="160">
                   <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-medicion" class="ish-bone-content"></div>
                 </foreignObject>
               </g>
               <g id="ishikawa-label-medioAmbiente" class="ish-label-group" onclick="window.__editCategory('medioAmbiente')">
-                <foreignObject x="430" y="330" width="150" height="24">
+                <foreignObject x="425" y="696" width="170" height="24">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-leaf"></i> Medio ambiente</div>
                 </foreignObject>
-                <foreignObject x="430" y="358" width="150" height="50">
+                <foreignObject x="425" y="720" width="170" height="160">
                   <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-medioAmbiente" class="ish-bone-content"></div>
                 </foreignObject>
               </g>
               <g id="ishikawa-cause">
-                <rect x="767" y="180" width="220" height="100" rx="12" fill="white" stroke="#2563eb" stroke-width="1.5" filter="url(#ish-shadow)"/>
-                <foreignObject x="767" y="180" width="220" height="100">
+                <rect x="767" y="410" width="220" height="100" rx="12" fill="white" stroke="#2563eb" stroke-width="1.5" filter="url(#ish-shadow)"/>
+                <foreignObject x="767" y="410" width="220" height="100">
                   <div xmlns="http://www.w3.org/1999/xhtml" class="ish-problem-box">
                     <div class="ish-problem-label">PROBLEMA</div>
                     <div class="ish-problem-divider"></div>
@@ -372,9 +329,6 @@
           <div class="step-title-group">
             <h2 class="step-title"><i class="fas fa-tasks step-header-icon"></i>Plan de Acción</h2>
             <span class="step-subtitle">Crea acciones correctivas o preventivas con responsables, fechas y prioridad</span>
-          </div>
-          <div class="step-header-actions hidden">
-            <button onclick="window.__toggleReviewDrawer(event)" class="btn btn-sm btn-outline-success" title="Ver resumen del análisis"><i class="fas fa-file-lines"></i>Resumen</button>
           </div>
         </div>
         <div class="step-body">
@@ -421,35 +375,40 @@
       </div>
     </div>
 
-    <!-- Tab 5: Full Data Table -->
+    <!-- Tab 5: Full Data Table (mismo patrón step-title-group que los wizard pages) -->
     <div id="content-tabla" class="hidden fade-in">
       <div class="step-card">
         <div class="step-header">
-          <i class="fas fa-table step-header-icon"></i>
-          <h2 class="step-title">Todos los Datos</h2>
-          <button onclick="window.__closeTableView()" class="btn btn-sm btn-outline ml-auto">
-            <i class="fas fa-times"></i> Cerrar
-          </button>
+          <div class="step-title-group">
+            <h2 class="step-title"><i class="fas fa-table step-header-icon"></i>Todos los Datos</h2>
+            <span class="step-subtitle">Visualiza, edita y exporta toda la información del análisis guardado</span>
+          </div>
         </div>
-        <!-- Sub-tabs for each section -->
-        <div class="data-subtabs">
-          <button class="data-subtab active" data-section="captura" onclick="window.__switchDataTab('captura')">
-            <i class="fas fa-clipboard"></i> Captura
-          </button>
-          <button class="data-subtab" data-section="ishikawa" onclick="window.__switchDataTab('ishikawa')">
-            <i class="fas fa-project-diagram"></i> Ishikawa
-          </button>
-          <button class="data-subtab" data-section="5whys" onclick="window.__switchDataTab('5whys')">
-            <i class="fas fa-question-circle"></i> 5 Porqués
-          </button>
-          <button class="data-subtab" data-section="plan" onclick="window.__switchDataTab('plan')">
-            <i class="fas fa-tasks"></i> Plan
-          </button>
-        </div>
-        <!-- Sticky toolbar with export/clear actions -->
-        <div class="data-table-toolbar" id="data-table-toolbar"></div>
-        <div class="step-body" id="data-table-body">
-          <!-- buildSectionRows renderiza la tabla completa aquí -->
+        <div class="step-body">
+
+          <!-- Analysis filters: Mes-Año + Máquina + list -->
+          <div id="analysis-filters" class="mb-3"></div>
+
+          <!-- Selected analysis info + actions bar (rendered by renderAnalysisFilters) -->
+          <div id="selected-analysis-bar" class="mb-3"></div>
+
+          <!-- Sub-tabs for each section (distributed evenly) -->
+          <div role="tablist" class="tabs tabs-bordered mb-3 w-full flex-nowrap items-center gap-0 bg-base-100 border border-base-200 rounded-lg p-0.5">
+            <button role="tab" class="tab tab-active font-semibold text-xs min-h-[36px] gap-1.5 transition-all duration-200 flex-1 justify-center" data-section="captura" onclick="window.__switchDataTab('captura')">
+              <i class="fas fa-clipboard text-blue-500"></i><span>Captura</span>
+            </button>
+            <button role="tab" class="tab font-semibold text-xs min-h-[36px] gap-1.5 transition-all duration-200 flex-1 justify-center" data-section="ishikawa" onclick="window.__switchDataTab('ishikawa')">
+              <i class="fas fa-project-diagram text-emerald-500"></i><span>Ishikawa</span>
+            </button>
+            <button role="tab" class="tab font-semibold text-xs min-h-[36px] gap-1.5 transition-all duration-200 flex-1 justify-center" data-section="5whys" onclick="window.__switchDataTab('5whys')">
+              <i class="fas fa-question-circle text-amber-500"></i><span>5 Porqués</span>
+            </button>
+            <button role="tab" class="tab font-semibold text-xs min-h-[36px] gap-1.5 transition-all duration-200 flex-1 justify-center" data-section="plan" onclick="window.__switchDataTab('plan')">
+              <i class="fas fa-tasks text-rose-500"></i><span>Plan</span>
+            </button>
+          </div>
+          <!-- Table content rendered by buildSectionRows -->
+          <div id="data-table-body"></div>
         </div>
       </div>
     </div>
@@ -459,51 +418,64 @@
   <!-- Step Navigation Bottom Bar -->
   <div class="step-nav" id="step-nav">
     <div class="step-nav-inner">
-      <div class="step-nav-left">
-        <button id="step-nav-prev" class="step-nav-btn step-nav-btn-secondary" onclick="window.__navigateStep(-1)">
-          <i class="fas fa-arrow-left"></i>
-          <span>Anterior</span>
-        </button>
-        <div class="step-nav-more" id="step-nav-more">
-          <button class="step-nav-btn step-nav-btn-ghost" onclick="window.__toggleStepMenu(event)" title="Más acciones" style="gap:10px;padding:8px 14px;font-size:12px">
-            <span>Acciones</span>
-            <i class="fas fa-ellipsis-vertical"></i>
+      <!-- Normal wizard navigation -->
+      <div id="step-nav-wizard-view" class="w-full flex items-center justify-between">
+        <div class="step-nav-left">
+          <button id="step-nav-prev" class="btn btn-outline btn-sm" onclick="window.__navigateStep(-1)">
+            <i class="fas fa-arrow-left"></i>
+            <span>Anterior</span>
           </button>
-          <div class="step-nav-menu" id="step-nav-menu">
-            <button onclick="window.__clearCurrentStep()" id="menu-clear-step">
-              <i class="fas fa-eraser"></i> Limpiar este paso
+          <div class="step-nav-divider hidden sm:block"></div>
+          <div class="step-nav-clear-actions">
+            <button onclick="window.__clearCurrentStep()" class="step-nav-clear-btn" title="Limpiar este paso">
+              <i class="fas fa-eraser"></i><span>Limpiar paso</span>
             </button>
-            <button onclick="window.__clearAll()">
-              <i class="fas fa-trash-alt"></i> Limpiar todo
+            <button onclick="window.__clearAll()" class="step-nav-clear-btn step-nav-clear-btn--danger" title="Limpiar todo">
+              <i class="fas fa-trash-alt"></i><span>Limpiar todo</span>
             </button>
           </div>
         </div>
+
+        <div class="step-nav-right" id="step-nav-right">
+          <!-- Global actions: Resumen & Todos los datos -->
+          <div class="step-nav-global-actions" id="step-nav-global-actions">
+            <button id="btn-resumen" onclick="window.__toggleReviewDrawer(event)" class="btn btn-ghost btn-sm hidden" title="Ver resumen del análisis">
+              <i class="fas fa-file-lines"></i><span>Resumen</span>
+            </button>
+            <div class="step-nav-divider" id="divider-resumen"></div>
+            <button onclick="window.__toggleTableView()" class="btn btn-ghost btn-sm" title="Ver todos los datos en tabla">
+              <i class="fas fa-table"></i><span>Datos</span>
+            </button>
+          </div>
+          <div class="step-nav-divider hidden md:block"></div>
+          <div id="step-nav-right-btn"></div>
+        </div>
       </div>
-      <div class="step-nav-center" id="step-nav-center">
-        <span class="step-nav-dot" data-step="0"></span>
-        <span class="step-nav-dot" data-step="1"></span>
-        <span class="step-nav-dot" data-step="2"></span>
-        <span class="step-nav-dot" data-step="3"></span>
-      </div>
-      <div class="step-nav-right" id="step-nav-right">
-        <button id="step-nav-next" class="step-nav-btn step-nav-btn-primary" onclick="window.__navigateStep(1)">
-          <span>Siguiente</span>
-          <i class="fas fa-arrow-right"></i>
-        </button>
+      <!-- Table view navigation (shown when data table is open, matches wizard pattern) -->
+      <div id="step-nav-table-view" class="hidden w-full flex items-center justify-between">
+        <div class="step-nav-left">
+          <button onclick="window.__clearAllFromTable()" class="step-nav-clear-btn step-nav-clear-btn--danger" title="Limpiar todo el análisis guardado">
+            <i class="fas fa-trash-alt"></i><span>Limpiar todo</span>
+          </button>
+          <div class="step-nav-divider"></div>
+          <div class="step-nav-clear-actions">
+            <button onclick="window.__exportFullPDF()" class="step-nav-clear-btn" title="Exportar todos los análisis en PDF">
+              <i class="fas fa-file-pdf text-red-500"></i><span>PDF</span>
+            </button>
+            <button onclick="window.__exportFullExcel()" class="step-nav-clear-btn" title="Exportar todos los análisis en Excel">
+              <i class="fas fa-file-excel text-green-600"></i><span>Excel</span>
+            </button>
+          </div>
+        </div>
+        <div class="step-nav-right">
+          <button onclick="window.__closeTableView()" class="btn btn-outline btn-sm" title="Volver al wizard principal">
+            <i class="fas fa-arrow-left"></i>
+            <span>Volver al wizard</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
-
-  <!-- Footer -->
-  <footer class="text-gray-400 py-4 sm:py-5 mt-8">
-    <div class="max-w-8xl xl:max-w-9xl mx-auto px-4 sm:px-6 text-center">
-      <p class="text-xs sm:text-sm">
-        Herramienta de Análisis Causa Raíz · Generado para gestión de mantenimiento y confiabilidad
-      </p>
-    </div>
-  </footer>
-
-
 
   <!-- Drawer Overlay -->
   <div id="drawer-overlay" class="fixed inset-0 bg-black/40 z-40 hidden" onclick="window.__closeReviewDrawer()"></div>
@@ -511,11 +483,11 @@
   <!-- Review Drawer -->
   <div id="review-drawer" class="review-drawer hidden">
     <div class="drawer-header">
-      <h2 class="text-lg font-bold text-[#1e3a5f]">
-        <i class="fas fa-file-alt mr-2"></i>Resumen del Análisis
+      <h2 class="text-base sm:text-lg font-bold text-base-content flex items-center gap-2">
+        <i class="fas fa-file-alt text-primary"></i>Resumen del Análisis
       </h2>
-      <button onclick="window.__closeReviewDrawer()" class="drawer-close" aria-label="Cerrar">
-        <i class="fas fa-times"></i>
+      <button onclick="window.__closeReviewDrawer()" class="btn btn-ghost btn-sm btn-square rounded-full" aria-label="Cerrar">
+        <i class="fas fa-times text-base-content/60"></i>
       </button>
     </div>
     <div class="drawer-body" id="drawer-tables-container">
@@ -523,13 +495,6 @@
     </div>
   </div>
 
-  <!-- Ishikawa Fullscreen Modal -->
-  <div id="ish-modal-overlay" class="ish-modal-overlay">
-    <div class="ish-modal-content">
-      <button class="ish-modal-close" data-modal-close><i class="fas fa-times"></i></button>
-      <div class="ish-modal-body"></div>
-    </div>
-  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

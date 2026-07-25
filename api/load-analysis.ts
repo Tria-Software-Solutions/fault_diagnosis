@@ -12,16 +12,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const meta = await head(BLOB_FILENAME);
-    if (!meta) return res.status(200).json({ error: 'Analysis not found' });
+    if (!meta) return res.status(200).json({ analyses: [] });
 
     const resp = await fetch(meta.downloadUrl, {
       headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
     });
     const record = await resp.json();
-    res.status(200).json(record);
+    // Support both old format (single record) and new format (array)
+    const analyses = record.analyses || (record.data ? [record] : []);
+    res.status(200).json({ analyses });
   } catch (err: any) {
     if (err?.message?.includes('does not exist') || err?.message?.includes('not found')) {
-      return res.status(200).json({ error: 'Analysis not found' });
+      return res.status(200).json({ analyses: [] });
     }
     res.status(200).json({ blobUnavailable: true });
   }

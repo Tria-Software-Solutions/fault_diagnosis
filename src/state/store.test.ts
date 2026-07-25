@@ -15,11 +15,9 @@ import {
 } from './store';
 
 describe('formatSingleDate', () => {
-  it('formats ISO date to Spanish locale', () => {
+  it('formats ISO date to DD-MM-YYYY', () => {
     const result = formatSingleDate('2026-07-23');
-    expect(result).toContain('julio');
-    expect(result).toContain('2026');
-    expect(result).toContain('23');
+    expect(result).toBe('23-07-2026');
   });
 
   it('returns empty string for empty input', () => {
@@ -33,9 +31,9 @@ describe('formatSingleDate', () => {
 });
 
 describe('formatShortDate', () => {
-  it('converts ISO to DD/MM format', () => {
-    expect(formatShortDate('2026-07-23')).toBe('23/07');
-    expect(formatShortDate('2026-03-15')).toBe('15/03');
+  it('converts ISO to DD-MM-YYYY format', () => {
+    expect(formatShortDate('2026-07-23')).toBe('23-07-2026');
+    expect(formatShortDate('2026-03-15')).toBe('15-03-2026');
   });
 
   it('returns empty for empty input', () => {
@@ -50,46 +48,41 @@ describe('formatShortDate', () => {
 describe('formatDateRange', () => {
   it('formats range in same month', () => {
     const result = formatDateRange('2026-07-10', '2026-07-15');
-    expect(result).toContain('10');
-    expect(result).toContain('15');
-    expect(result).toContain('julio');
-    expect(result).toContain('—');
+    expect(result).toBe('10-07-2026 — 15-07-2026');
   });
 
   it('formats range across months', () => {
     const result = formatDateRange('2026-07-10', '2026-08-15');
-    expect(result).toContain('julio');
-    expect(result).toContain('agosto');
-    expect(result).toContain('—');
+    expect(result).toBe('10-07-2026 — 15-08-2026');
   });
 
   it('returns single date if only one provided', () => {
     const d = formatDateRange('2026-07-23', '');
-    expect(d).toContain('julio');
+    expect(d).toBe('23-07-2026');
     const d2 = formatDateRange('', '2026-07-23');
-    expect(d2).toContain('julio');
+    expect(d2).toBe('23-07-2026');
   });
 });
 
 describe('formatDate', () => {
   it('formats single date string', () => {
     const result = formatDate('2026-07-23') as string;
-    expect(result).toContain('julio');
+    expect(result).toBe('23-07-2026');
   });
 
   it('formats single date array', () => {
     const result = formatDate(['2026-07-23']) as string;
-    expect(result).toContain('julio');
+    expect(result).toBe('23-07-2026');
   });
 
   it('formats range array (2 elements)', () => {
     const result = formatDate(['2026-07-10', '2026-07-15']) as string;
-    expect(result).toContain('—');
+    expect(result).toBe('10-07-2026 — 15-07-2026');
   });
 
   it('formats multiple dates array (3+ elements)', () => {
     const result = formatDate(['2026-07-10', '2026-07-14', '2026-07-20']) as string;
-    expect(result).toBe('10/07, 14/07, 20/07');
+    expect(result).toBe('10-07-2026, 14-07-2026, 20-07-2026');
   });
 
   it('returns empty for undefined', () => {

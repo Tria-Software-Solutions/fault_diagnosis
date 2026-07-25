@@ -62,3 +62,19 @@ export function getTodayISODate(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/**
+ * Convierte una fecha ISO (YYYY-MM-DD) al formato DD-MM-YYYY.
+ * Ejemplo: "2026-07-24" → "24-07-2026"
+ * Válida que los componentes sean numéricos antes de transformar.
+ */
+export function formatDateDDMMYYYY(isoDate: string): string {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  // Validate that all parts are numeric (YYYY, MM, DD)
+  if (!/^\d{4}$/.test(parts[0]) || !/^\d{2}$/.test(parts[1]) || !/^\d{2}$/.test(parts[2])) {
+    return isoDate;
+  }
+  return `${parts[2]}-${parts[1]}-${parts[0]}`;
+}

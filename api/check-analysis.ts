@@ -18,14 +18,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
     });
     const record = await resp.json();
+    const analyses = record.analyses || (record.data ? [record] : []);
 
     res.status(200).json({
-      exists: true,
-      savedAt: record.savedAt || '',
-      captura: record.data?.captura || {},
-      whys: record.data?.whys || {},
-      ishikawa: record.data?.ishikawa || {},
-      acciones: record.data?.acciones || { correctivas: [], preventivas: [] },
+      exists: analyses.length > 0,
+      count: analyses.length,
     });
   } catch (err: any) {
     if (err?.message?.includes('does not exist') || err?.message?.includes('not found')) {

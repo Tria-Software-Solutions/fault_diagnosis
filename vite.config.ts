@@ -25,12 +25,30 @@ function readAnalysisFile(): any | null {
 }
 
 function writeAnalysisFile(data: any): void {
-  const record = {
-    id: 'analisis',
-    savedAt: new Date().toISOString(),
-    data: data.data || data
+  // data should be { analyses: AnalysisEntry[] }
+  // Store the raw { analyses: [...] } format directly, no wrapping
+  fs.writeFileSync(getAnalysisPath(), JSON.stringify(data, null, 2), 'utf-8')
+}
+
+/** Normalizes stored content to { analyses: AnalysisEntry[] } format,
+ *  supporting migration from:
+ *    1. New format: { analyses: [...] }
+ *    2. Buggy format: { id, savedAt, data: { analyses: [...] } }
+ *    3. Old format: { id, savedAt, data: { captura, ... } } */
+function normalizeToAnalyses(content: any): { analyses: any[] } {
+  if (!content) return { analyses: [] }
+  // New format: { analyses: [...] }
+  if (Array.isArray(content.analyses)) return { analyses: content.analyses }
+  // Buggy writeAnalysisFile wrapped { analyses: [...] } inside data:
+  // { id, savedAt, data: { analyses: [...] } }
+  if (content.data && Array.isArray(content.data.analyses)) {
+    return { analyses: content.data.analyses }
   }
-  fs.writeFileSync(getAnalysisPath(), JSON.stringify(record, null, 2), 'utf-8')
+  // Old format: { id, savedAt, data: { captura, whys, ishikawa, acciones } }
+  if (content.data && typeof content.data === 'object') {
+    return { analyses: [{ id: content.id || 'legacy', savedAt: content.savedAt || '', data: content.data }] }
+  }
+  return { analyses: [] }
 }
 
 function analysisStoragePlugin(): any {
@@ -66,29 +84,26 @@ function analysisStoragePlugin(): any {
             return sendJson({ success: true, id: 'analisis', filename: ANALYSIS_FILE })
           }
 
-          // GET /api/check-analysis — checks if analisis.json exists
+          // GET /api/check-analysis — checks if analisis.json has entries
           if (url === '/api/check-analysis' && req.method === 'GET') {
             const content = readAnalysisFile()
             if (content) {
+              const normalized = normalizeToAnalyses(content)
               return sendJson({
-                exists: true,
-                savedAt: content.savedAt || '',
-                captura: content.data?.captura || {},
-                whys: content.data?.whys || {},
-                ishikawa: content.data?.ishikawa || {},
-                acciones: content.data?.acciones || { correctivas: [], preventivas: [] }
+                exists: normalized.analyses.length > 0,
+                count: normalized.analyses.length,
               })
             }
-            return sendJson({ exists: false })
+            return sendJson({ exists: false, count: 0 })
           }
 
-          // GET /api/load-analysis — reads analisis.json
+          // GET /api/load-analysis — reads analisis.json, returns { analyses: [...] }
           if (url === '/api/load-analysis' && req.method === 'GET') {
             const content = readAnalysisFile()
             if (!content) {
-              return sendJson({ error: 'Analysis not found' }, 404)
+              return sendJson({ analyses: [] })
             }
-            return sendJson(content)
+            return sendJson(normalizeToAnalyses(content))
           }
 
           // PUT /api/update-analysis — overwrites analisis.json

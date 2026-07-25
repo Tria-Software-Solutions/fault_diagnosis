@@ -21,10 +21,20 @@ export function showTab(tabName: string): void {
   }
 
   document.querySelectorAll('[id^="content-"]').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.remove('tab-active'));
+
+  // Update daisyUI step classes for active state
+  const stepIds = ['tab-captura', 'tab-ishikawa', 'tab-5whys', 'tab-plan'];
+  stepIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('step-primary');
+  });
 
   document.getElementById(`content-${tabName}`)?.classList.remove('hidden');
-  document.getElementById(`tab-${tabName}`)?.classList.add('tab-active');
+  const currentStep = document.getElementById(`tab-${tabName}`);
+  if (currentStep && !currentStep.classList.contains('step-success')) {
+    currentStep.classList.add('step-primary');
+  }
 
   if (tabName === 'ishikawa') {
     refreshIshikawaDiagram();
@@ -115,29 +125,18 @@ export function updateStepNav(): void {
   const currentIndex = STEPS.indexOf(currentId as StepName);
   if (currentIndex === -1) return;
 
-  const dots = document.querySelectorAll('.step-nav-dot');
-  dots.forEach((dot, i) => {
-    dot.classList.toggle('active', i === currentIndex);
-    dot.classList.toggle('completed', i < currentIndex);
-  });
-
   const prevBtn = document.getElementById('step-nav-prev') as HTMLButtonElement | null;
   if (prevBtn) {
     prevBtn.style.display = currentIndex === 0 ? 'none' : '';
     prevBtn.disabled = false;
   }
 
-  const accionesLabel = document.querySelector('#step-nav-more button span');
-  if (accionesLabel) {
-    (accionesLabel as HTMLElement).style.display = currentIndex === 0 ? '' : 'none';
-  }
-
-  const navRight = document.getElementById('step-nav-right');
-  if (!navRight) return;
+  const btnContainer = document.getElementById('step-nav-right-btn');
+  if (!btnContainer) return;
 
   if (currentId === 'plan') {
-    navRight.innerHTML = `
-      <button id="step-nav-save" class="step-nav-btn step-nav-btn-success" onclick="window.__saveAnalysis()">
+    btnContainer.innerHTML = `
+      <button id="step-nav-save" class="btn btn-success btn-sm" onclick="window.__saveAnalysis()">
         <i class="fas fa-save"></i>
         <span>Guardar</span>
       </button>
@@ -149,10 +148,10 @@ export function updateStepNav(): void {
   const isWhys = currentId === '5whys';
   const nextLabel = isWhys ? 'Siguiente' : (isLast ? 'Finalizar' : 'Siguiente');
   const nextIcon = isWhys ? 'fa-arrow-right' : (isLast ? 'fa-check-circle' : 'fa-arrow-right');
-  const nextClass = isWhys ? 'step-nav-btn-primary' : (isLast ? 'step-nav-btn-success' : 'step-nav-btn-primary');
+  const nextClass = isLast ? 'btn-success' : 'btn-primary';
 
-  navRight.innerHTML = `
-    <button id="step-nav-next" class="step-nav-btn ${nextClass}" onclick="window.__navigateStep(1)" disabled>
+  btnContainer.innerHTML = `
+    <button id="step-nav-next" class="btn ${nextClass} btn-sm" onclick="window.__navigateStep(1)" disabled>
       <span>${nextLabel}</span>
       <i class="fas ${nextIcon}"></i>
     </button>
@@ -183,43 +182,72 @@ export function updateTabLockState(): void {
   const ish = rcaData.ishikawa || {};
   const acciones = rcaData.acciones || { correctivas: [], preventivas: [] };
 
-  const allCapturaFields = [c.fecha?.length ? c.fecha.join(', ') : '', c.maquina, c.tiempoParo, c.problema, c.sintomas, c.responsable];
-  const capturaCompleta = allCapturaFields.every(val => !!val);
   const ishikawaCompleto = CATEGORY_ORDER.every(cat => !!ish[cat]);
   const onWhysTab = !document.getElementById('content-5whys')?.classList.contains('hidden');
   const whysCompleto = !onWhysTab && !!(w.why1 || w.why2 || w.why3 || w.why4 || w.why5);
   const planCompleto = !!(acciones.correctivas.length > 0 || acciones.preventivas.length > 0);
   const capturaDesbloqueada = !!c.problema;
+  const capturaCompleta = !!(c.maquina && c.problema);
 
+  // Lock/unlock tabs based on captura
   const lockedTabs = ['ishikawa', '5whys', 'plan'];
   lockedTabs.forEach(tabName => {
     const btn = document.getElementById(`tab-${tabName}`);
     if (!btn) return;
     if (capturaDesbloqueada) {
       btn.classList.remove('tab-locked');
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
       btn.onclick = null;
       btn.onclick = function() { showTab(tabName); };
     } else {
       btn.classList.add('tab-locked');
+      btn.style.opacity = '0.4';
+      btn.style.pointerEvents = 'none';
     }
   });
 
-  document.querySelectorAll('.step-header-actions').forEach(el => {
-    el.classList.toggle('hidden', !capturaDesbloqueada);
+  // Toggle just the Resumen button + its divider (Datos stays visible always)
+  const resumenBtn = document.getElementById('btn-resumen');
+  const dividerResumen = document.getElementById('divider-resumen');
+  if (resumenBtn && dividerResumen) {
+    const shouldHide = !capturaDesbloqueada;
+    resumenBtn.classList.toggle('hidden', shouldHide);
+    dividerResumen.classList.toggle('hidden', shouldHide);
+  }
+
+  // Update step states using daisyUI steps classes
+  // Simplified: solo 2 colores con significado claro
+  // - step-success (verde) = completado
+  // - step-primary (azul) = paso activo actual
+  // - default (gris) = disponible pero no activo
+  const steps = [
+    { id: 'tab-captura', completed: capturaCompleta },
+    { id: 'tab-ishikawa', completed: ishikawaCompleto && capturaDesbloqueada },
+    { id: 'tab-5whys', completed: whysCompleto && capturaDesbloqueada },
+    { id: 'tab-plan', completed: planCompleto && capturaDesbloqueada },
+  ];
+
+  steps.forEach((step, index) => {
+    const el = document.getElementById(step.id);
+    if (!el) return;
+
+    // Remove all step color classes
+    el.classList.remove('step-primary', 'step-success', 'step-info', 'step-warning', 'step-error');
+
+    if (step.completed) {
+      el.classList.add('step-success');
+      el.dataset.content = '✓';
+    } else {
+      el.dataset.content = String(index + 1);
+      // Check if this is the currently active step
+      const isActive = !document.getElementById(`content-${STEPS[index]}`)?.classList.contains('hidden');
+      if (isActive) {
+        el.classList.add('step-primary');
+      }
+      // Default gray style for non-completed, non-active steps
+    }
   });
-
-  const toggleComplete = (id: string, condition: boolean) => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('completed', condition);
-  };
-
-  toggleComplete('tab-captura', capturaCompleta);
-  toggleComplete('conn-0', capturaCompleta);
-  toggleComplete('tab-ishikawa', ishikawaCompleto && capturaDesbloqueada);
-  toggleComplete('conn-1', ishikawaCompleto && capturaDesbloqueada);
-  toggleComplete('tab-5whys', whysCompleto && capturaDesbloqueada);
-  toggleComplete('conn-2', whysCompleto && capturaDesbloqueada);
-  toggleComplete('tab-plan', planCompleto && capturaDesbloqueada);
 }
 
 /* ==========================================================================
@@ -256,19 +284,10 @@ export function updateClearAllButton(): void {
 }
 
 /* ==========================================================================
-   Step Menu & Clear Current Step
+   Clear Current Step
    ========================================================================== */
 
-export function toggleStepMenu(e: Event): void {
-  e.stopPropagation();
-  const menu = document.getElementById('step-nav-menu');
-  if (menu) menu.classList.toggle('open');
-}
-
 export async function clearCurrentStep(): Promise<void> {
-  const menu = document.getElementById('step-nav-menu');
-  if (menu) menu.classList.remove('open');
-
   const currentTab = document.querySelector('[id^="content-"]:not(.hidden)');
   if (!currentTab) return;
   const currentId = currentTab.id.replace('content-', '');

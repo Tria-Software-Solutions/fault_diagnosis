@@ -47,19 +47,28 @@ function buildHTML(containerId: string, mode: DateMode, value: string[], today: 
 function renderBody(mode: DateMode, value: string[], today: string): string {
   switch (mode) {
     case 'single':
-      return `<input type="date" class="std-input dp-date-input" value="${escapeHtml(value[0] || today)}" max="${today}">`;
+      return `<input type="date" class="input input-bordered w-full dp-date-input" value="${escapeHtml(value[0] || '')}" max="${today}">`;
     case 'range':
+      const fromVal = value[0] || '';
+      const toVal = value[1] || '';
       return `
-        <input type="date" class="std-input dp-date-input dp-range-from" value="${escapeHtml(value[0] || '')}" max="${today}" placeholder="Desde">
+        <input type="date" class="input input-bordered w-full dp-date-input dp-range-from" value="${escapeHtml(fromVal)}" max="${toVal || today}">
         <span class="dp-range-sep">—</span>
-        <input type="date" class="std-input dp-date-input dp-range-to" value="${escapeHtml(value[1] || '')}" max="${today}" placeholder="Hasta">`;
+        <input type="date" class="input input-bordered w-full dp-date-input dp-range-to" value="${escapeHtml(toVal)}" min="${fromVal || ''}" max="${today}">`;
     case 'multiple':
+      const chips = value.map((d, i) =>
+        `<span class="dp-chip">${escapeHtml(formatFullDate(d))}<button type="button" class="dp-chip-remove" data-index="${i}"><i class="fas fa-times"></i></button></span>`
+      ).join('');
       return `
-        <input type="date" class="std-input dp-date-input dp-multi-input" max="${today}" placeholder="Agregar fecha">
-        <button type="button" class="btn btn-primary btn-sm dp-add-btn"><i class="fas fa-plus"></i></button>
-        <div class="dp-chips">${value.map((d, i) =>
-          `<span class="dp-chip">${escapeHtml(formatShortDate(d))}<button type="button" class="dp-chip-remove" data-index="${i}">&times;</button></span>`
-        ).join('')}</div>`;
+        <div class="dp-multi-wrap">
+          <div class="dp-multi-add-row">
+            <input type="date" class="input input-bordered w-full dp-date-input dp-multi-input" max="${today}">
+            <button type="button" class="btn btn-primary btn-sm dp-add-btn" title="Agregar fecha"><i class="fas fa-plus"></i></button>
+          </div>
+          <div class="dp-chips${chips ? '' : ' empty'}">
+            ${chips || '<span class="dp-chips-empty">Ninguna fecha seleccionada</span>'}
+          </div>
+        </div>`;
   }
 }
 
@@ -141,9 +150,25 @@ function attachBodyListeners(container: HTMLElement, onChange: (val: string[]) =
       const input = this as HTMLInputElement;
       setValue(input.value ? [input.value] : []);
     } else if (mode === 'range') {
-      const inputs = container.querySelectorAll('.dp-range .dp-date-input');
-      const from = (inputs[0] as HTMLInputElement)?.value || '';
-      const to = (inputs[1] as HTMLInputElement)?.value || '';
+      const fromInput = container.querySelector('.dp-range-from') as HTMLInputElement | null;
+      const toInput = container.querySelector('.dp-range-to') as HTMLInputElement | null;
+      let from = fromInput?.value || '';
+      let to = toInput?.value || '';
+      // Validate: if both are set and from > to, swap them
+      if (from && to && from > to) {
+        [from, to] = [to, from];
+        if (fromInput) fromInput.value = from;
+        if (toInput) toInput.value = to;
+    // Update min/max constraints
+    fromInput?.setAttribute('max', to || '');
+    toInput?.setAttribute('min', from || '');
+      } else {
+        // Update constraints based on what changed (or clear them)
+        if (from) toInput?.setAttribute('min', from);
+        else toInput?.removeAttribute('min');
+        if (to) fromInput?.setAttribute('max', to);
+        else fromInput?.removeAttribute('max');
+      }
       const newVal: string[] = [];
       if (from) newVal.push(from);
       if (to) newVal.push(to);
@@ -199,6 +224,16 @@ export function setDatepickerValue(containerId: string, value: string[]): void {
       attachBodyListeners(container, () => {});
     }
   }
+}
+
+function formatFullDate(isoDate: string): string {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const day = parseInt(parts[2], 10);
+  const month = months[parseInt(parts[1], 10) - 1];
+  return `${day} de ${month} de ${parts[0]}`;
 }
 
 export function formatShortDate(isoDate: string): string {
