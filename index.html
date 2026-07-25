@@ -40,18 +40,18 @@
 
   <!-- Progress Stepper -->
   <div class="stepper-wrap">
-    <ul class="steps w-full max-w-lg mx-auto px-4 py-4 [&_.step]:text-center steps-center">
-      <li class="step step-info font-semibold cursor-pointer" id="tab-captura" onclick="window.__showTab('captura')" data-content="1">
-        Captura
+    <ul class="steps w-full max-w-lg mx-auto px-4 py-1.5 [&_.step]:text-center steps-center">
+      <li class="step step-primary font-semibold cursor-pointer" id="tab-captura" onclick="window.__showTab('captura')" data-content="1" aria-label="Paso 1: Captura del Problema">
+        <span>Captura</span>
       </li>
-      <li class="step cursor-pointer" id="tab-ishikawa" onclick="window.__showTab('ishikawa')" data-content="2">
-        Ishikawa
+      <li class="step cursor-pointer" id="tab-ishikawa" onclick="window.__showTab('ishikawa')" data-content="2" aria-label="Paso 2: Diagrama de Ishikawa">
+        <span>Ishikawa</span>
       </li>
-      <li class="step cursor-pointer" id="tab-5whys" onclick="window.__showTab('5whys')" data-content="3">
-        5 Porqués
+      <li class="step cursor-pointer" id="tab-5whys" onclick="window.__showTab('5whys')" data-content="3" aria-label="Paso 3: 5 Porqués">
+        <span>5 Porqués</span>
       </li>
-      <li class="step cursor-pointer" id="tab-plan" onclick="window.__showTab('plan')" data-content="4">
-        Plan
+      <li class="step cursor-pointer" id="tab-plan" onclick="window.__showTab('plan')" data-content="4" aria-label="Paso 4: Plan de Acción">
+        <span>Plan</span>
       </li>
     </ul>
   </div>

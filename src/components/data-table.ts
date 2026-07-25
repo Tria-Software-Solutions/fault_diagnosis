@@ -3,9 +3,11 @@ import { escapeHtml, formatDateDDMMYYYY } from '../utils/text';
 import { confirmAction } from '../utils/confirm';
 import { showToast } from '../utils/toast';
 import { generateIshikawaPreview } from './ishikawa';
+import { exportSingleRowPDF } from '../services/exportPDF';
+import { exportSingleRowExcel } from '../services/exportExcel';
 import { closeReviewDrawer, renderDrawerTable } from './drawer';
 import { addAccionToDOM } from './plan';
-import { updateEntryById } from '../services/analysisStorage';
+import { updateEntryById, deleteAnalysisById, loadAnalysis } from '../services/analysisStorage';
 
 /* ==========================================================================
    Full Data Table View Component — Section Tabs
@@ -339,11 +341,9 @@ window.__deleteCurrentAnalysis = async function(): Promise<void> {
   if (!confirmed) return;
 
   const entryId = savedAnalyses[selectedAnalysisIndex].id;
-  const { deleteAnalysisById } = await import('../services/analysisStorage');
   await deleteAnalysisById(entryId);
 
   // Refresh from the server
-  const { loadAnalysis } = await import('../services/analysisStorage');
   const entries = await loadAnalysis();
   setSavedAnalyses(entries);
 
@@ -627,7 +627,6 @@ export async function deleteSection(
 
 /** Exports a single row/section as a compact PDF */
 window.__exportRowPDF = async function(section: string, tipo?: string, index?: number): Promise<void> {
-  const { exportSingleRowPDF } = await import('../services/exportPDF');
   try {
     await exportSingleRowPDF(section, tipo, index);
   } catch (err) {
@@ -637,7 +636,6 @@ window.__exportRowPDF = async function(section: string, tipo?: string, index?: n
 
 /** Exports a single row/section as a compact Excel */
 window.__exportRowExcel = async function(section: string, tipo?: string, index?: number): Promise<void> {
-  const { exportSingleRowExcel } = await import('../services/exportExcel');
   try {
     await exportSingleRowExcel(section, tipo, index);
   } catch (err) {

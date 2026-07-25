@@ -22,8 +22,8 @@ import { addAccion, removeAccion, addAccionToDOM, clearActionPlan } from './comp
 import { renderDatepicker, getDatepickerValue, setDatepickerValue } from './components/datepicker';
 import { toggleReviewDrawer, openReviewDrawer, closeReviewDrawer, renderDrawerTable } from './components/drawer';
 import { toggleTableView, openTableView, closeTableView, renderDataTable, startEdit, saveEdit, cancelEdit, deleteField, deleteSection, deletePlanRow, switchDataTab } from './components/data-table';
-import { exportExcel } from './services/exportExcel';
-import { handlePDFExport, createSimplifiedIshikawa, createSimplifiedPareto } from './services/exportPDF';
+import { exportExcel, exportAllExcel } from './services/exportExcel';
+import { handlePDFExport, createSimplifiedIshikawa, createSimplifiedPareto, exportAllPDF } from './services/exportPDF';
 import { recordRootCauseForPareto, getIshikawaParetoData, getAccumulatedParetoData } from './services/pareto';
 import { getIshikawaHistory, updateIshikawaForMachine } from './services/ishikawaHistory';
 import {
@@ -125,11 +125,9 @@ function registerGlobalAPI(): void {
   window.__handlePDFExport = () => handlePDFExport(updateIshikawaForMachine);
   window.__exportExcel = () => exportExcel(updateIshikawaForMachine);
   window.__exportFullPDF = async () => {
-    const { exportAllPDF } = await import('./services/exportPDF');
     exportAllPDF(savedAnalyses);
   };
   window.__exportFullExcel = async () => {
-    const { exportAllExcel } = await import('./services/exportExcel');
     exportAllExcel(savedAnalyses);
   };
   window.__startEdit = startEdit;
@@ -248,6 +246,7 @@ async function clearAll(skipConfirm = false): Promise<void> {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('step-success', 'step-info', 'step-neutral', 'step-primary');
+
     if (id !== 'tab-captura') {
       el.classList.add('tab-locked');
       el.style.opacity = '0.4';

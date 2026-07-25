@@ -46,6 +46,19 @@
   --sky: #e0f2fe;
 }
 
+/* Force light color-scheme on all form elements — prevent dark inputs in dark mode */
+html {
+  color-scheme: light !important;
+}
+
+input, select, textarea,
+.input, .select, .textarea,
+.input-bordered, .select-bordered, .textarea-bordered {
+  color-scheme: light !important;
+  background-color: #fff !important;
+  color: #0f172a !important;
+}
+
 /* ==========================================================================
    Layout General
    ========================================================================== */
@@ -206,9 +219,9 @@ header::before {
 
 @media (max-width: 480px) {
   .header-inner {
-    padding: 10px 14px;
+    padding: 12px 14px;
     gap: 8px;
-    min-height: 52px;
+    min-height: 60px;
   }
   .header-logo {
     height: clamp(34px, 7vw, 44px);
@@ -1368,7 +1381,7 @@ body:not(.loading) .main-content {
   backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
-  padding: 6px 0 4px;
+  padding: 4px 0 2px;
 }
 
 /* Bottom accent line */
@@ -1385,15 +1398,73 @@ body:not(.loading) .main-content {
 /* Locked step */
 .step.tab-locked {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.35;
   pointer-events: none;
 }
 
+
+
 /* Improve daisyUI step circle sizing and transitions */
 .steps .step {
-  transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
+  transition: color 0.35s ease, background-color 0.35s ease, border-color 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-size: 13px;
   font-weight: 500;
+}
+
+/* Numbers inside step circles */
+.steps .step::before {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Step label text */
+.steps .step > span {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+/* Active step — blue circle (daisyUI default) */
+/* Completed step — green circle with check (daisyUI default) */
+
+.steps .step:not(.tab-locked):hover {
+  cursor: pointer;
+}
+
+/* Mobile: compact step circles + smaller text */
+@media (max-width: 640px) {
+  .stepper-wrap {
+    padding: 3px 0 1px;
+  }
+  .steps .step {
+    font-size: 11px;
+  }
+  .steps .step::before {
+    font-size: 12px;
+  }
+  .steps .step > span {
+    font-size: 11px;
+  }
+}
+
+/* Mobile small: adjust sticky top to match shorter header */
+@media (max-width: 480px) {
+  .stepper-wrap {
+    top: 60px;
+  }
+}
+
+/* Ultra-compact: hide text labels on small phones */
+@media (max-width: 400px) {
+  .steps .step > span {
+    display: none;
+  }
+  .stepper-wrap {
+    padding: 2px 0 1px;
+  }
+  .steps .step::before {
+    font-size: 13px;
+  }
 }
 
 /* ==========================================================================
@@ -1807,8 +1878,21 @@ body:not(.loading) .main-content {
     flex-direction: column;
     align-items: stretch;
   }
+  .dp-body .dp-date-input {
+    height: 40px;
+    min-height: 40px;
+  }
   .dp-multi-add-row {
     flex-direction: row;
+  }
+  .dp-multi-add-row .dp-date-input {
+    flex: 1;
+    min-width: 0;
+  }
+  .dp-range-sep {
+    text-align: center;
+    padding: 2px 0;
+    font-size: 12px;
   }
   .dp-chips {
     width: 100%;

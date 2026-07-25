@@ -241,11 +241,10 @@ export function updateTabLockState(): void {
     } else {
       el.dataset.content = String(index + 1);
       // Check if this is the currently active step
-      const isActive = !document.getElementById(`content-${STEPS[index]}`)?.classList.contains('hidden');
+      const isActive = !document.getElementById('content-' + STEPS[index])?.classList.contains('hidden');
       if (isActive) {
         el.classList.add('step-primary');
       }
-      // Default gray style for non-completed, non-active steps
     }
   });
 }
