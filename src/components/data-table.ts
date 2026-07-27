@@ -3,8 +3,8 @@ import { escapeHtml, formatDateDDMMYYYY } from '../utils/text';
 import { confirmAction } from '../utils/confirm';
 import { showToast } from '../utils/toast';
 import { generateIshikawaPreview } from './ishikawa';
-import { exportSingleRowPDF } from '../services/exportPDF';
-import { exportSingleRowExcel } from '../services/exportExcel';
+import { exportSingleRowPDF, exportAllPDF } from '../services/exportPDF';
+import { exportSingleRowExcel, exportAllExcel } from '../services/exportExcel';
 import { closeReviewDrawer, renderDrawerTable } from './drawer';
 import { addAccionToDOM } from './plan';
 import { updateEntryById, deleteAnalysisById, loadAnalysis } from '../services/analysisStorage';
@@ -101,56 +101,72 @@ function updateSubtabDisabled(): void {
   });
 }
 
-/** Renders the selected analysis info bar + export actions below the filter list */
-function renderSelectedAnalysisBar(): void {
-  const container = document.getElementById('selected-analysis-bar');
-  if (!container) return;
-
-  if (savedAnalyses.length === 0 || selectedAnalysisIndex < 0) {
-    container.innerHTML = '';
-    return;
-  }
-
-  const entry = savedAnalyses[selectedAnalysisIndex];
-  if (!entry) {
-    container.innerHTML = '';
-    return;
-  }
-
+/** Gets the display value for a cell from an analysis entry */
+function getEntryDisplayValue(entry: import('../state/store').AnalysisEntry, section: string, key: string): string {
   const data = entry.data;
-  const maquina = data.captura?.maquina || 'Sin máquina';
-  const problema = data.captura?.problema || 'Sin problema';
-  const shortDate = formatDate(data.captura?.fecha);
-  const indicador = data.captura?.indicador || '';
-  const hasData = savedAnalyses.length > 0;
-  const disabledClass = hasData ? '' : ' btn-disabled opacity-50 pointer-events-none';
+  const captura = data.captura || {};
+  const whys = data.whys || {};
+  const ishikawa = data.ishikawa || {};
 
-  container.innerHTML = `<div class="selected-analysis-bar">
-    <div class="selected-analysis-info">
-      <i class="fas fa-cube text-blue-500"></i>
-      <span class="selected-machine font-semibold">${escapeHtml(maquina)}</span>
-      <span class="selected-sep">•</span>
-      <span class="selected-problem">${escapeHtml(problema.substring(0, 60))}</span>
-      ${indicador ? `<span class="selected-sep">•</span><span class="selected-indicator">${escapeHtml(indicador)}</span>` : ''}
-      <span class="selected-sep">•</span>
-      <span class="selected-date">${escapeHtml(shortDate)}</span>
-    </div>
-    <div class="selected-analysis-actions">
-      <button class="btn btn-ghost btn-xs gap-1${disabledClass}" onclick="window.__exportFullPDF()" title="${hasData ? 'Exportar todos en PDF' : 'No hay datos'}">
-        <i class="fas fa-file-pdf text-red-500"></i>
-        <span>PDF</span>
-      </button>
-      <button class="btn btn-ghost btn-xs gap-1${disabledClass}" onclick="window.__exportFullExcel()" title="${hasData ? 'Exportar todos en Excel' : 'No hay datos'}">
-        <i class="fas fa-file-excel text-green-600"></i>
-        <span>Excel</span>
-      </button>
-      <div class="selected-actions-divider"></div>
-      <button class="btn btn-ghost btn-xs gap-1 text-red-500 hover:bg-red-50" onclick="window.__deleteCurrentAnalysis()" title="Eliminar este análisis">
-        <i class="fas fa-trash-alt"></i>
-        <span>Eliminar</span>
-      </button>
-    </div>
-  </div>`;
+  if (section === 'captura') {
+    const raw = captura[key as keyof import('../state/store').RCACaptura];
+    if (key === 'fecha') return formatDate(raw);
+    if (key === 'tiempoParo') {
+      const mins = (raw as string) || '';
+      if (!mins) return '';
+      const total = parseInt(mins, 10);
+      if (isNaN(total) || total < 0) return mins;
+      if (total === 0) return '0 min';
+      if (total < 60) return `${total} min`;
+      const hrs = Math.floor(total / 60);
+      const m = total % 60;
+      return m === 0 ? `${hrs}h` : `${hrs}h ${m}min`;
+    }
+    return (raw as string) || '';
+  } else if (section === 'ishikawa') {
+    return ishikawa[key] || '';
+  } else if (section === '5whys') {
+    if (key === 'causaRaiz') {
+      for (let i = 5; i >= 1; i--) {
+        if (whys[`why${i}` as keyof import('../state/store').RCAWhys]) {
+          return whys[`why${i}` as keyof import('../state/store').RCAWhys] as string;
+        }
+      }
+      return '';
+    }
+    return (whys[key as keyof import('../state/store').RCAWhys] as string) || '';
+  }
+  return '';
+}
+
+/** Defines headers for each data section */
+function getSectionHeaders(section: DataSection): { label: string; key: string }[] {
+  if (section === 'captura') {
+    return [
+      { key: 'maquina', label: 'Máquina' },
+      { key: 'problema', label: 'Problema' },
+      { key: 'fecha', label: 'Fecha' },
+      { key: 'tiempoParo', label: 'Tiempo Paro' },
+      { key: 'indicador', label: 'Indicador' },
+      { key: 'sintomas', label: 'Síntomas' },
+      { key: 'responsable', label: 'Responsable' }
+    ];
+  } else if (section === 'ishikawa') {
+    return [
+      { key: 'maquina', label: 'Máquina' },
+      { key: 'metodo', label: 'Método' },
+      { key: 'materiales', label: 'Materiales' },
+      { key: 'manoObra', label: 'Mano de obra' },
+      { key: 'medicion', label: 'Medición' },
+      { key: 'medioAmbiente', label: 'Medio Ambiente' }
+    ];
+  } else if (section === '5whys') {
+    const hdrs: { label: string; key: string }[] = [];
+    for (let i = 1; i <= 5; i++) hdrs.push({ key: `why${i}`, label: `Por qué ${i}` });
+    hdrs.push({ key: 'causaRaiz', label: 'Causa Raíz' });
+    return hdrs;
+  }
+  return [];
 }
 
 /** Renders the filter bar (Mes-Año + Máquina) and a selectable list of analyses */
@@ -219,38 +235,12 @@ function renderAnalysisFilters(): void {
     </div>
   </div>`;
 
-  // Also render the selected analysis bar below
-  renderSelectedAnalysisBar();
+  // No selected analysis bar — all entries show as rows in the table
 }
 
-/** Selects an analysis by index and refreshes the view */
-window.__selectAnalysis = function(idx: number): void {
-  setSelectedAnalysisIndex(idx);
-  syncSavedRcaDataFromSelected();
-  renderAnalysisFilters();
-  renderDataTable();
-};
-
-/** Re-evaluates filter + auto-selects first visible if current selection is out of filter */
+/** Re-evaluates filter and refreshes the table */
 function applyFilterAndSync(): void {
-  const entries = savedAnalyses;
-  const filtered = entries.filter(entry => {
-    const fechaAnalisis = entry.data.captura?.fecha?.[0] || '';
-    if (filterMonth && fechaAnalisis.substring(0, 7) !== filterMonth) return false;
-    if (filterMachine && entry.data.captura?.maquina?.trim() !== filterMachine) return false;
-    return true;
-  });
-
-  // Only auto-select if the current selection is no longer in the filtered set
-  const currentStillVisible = selectedAnalysisIndex >= 0 && filtered.some(e => entries.indexOf(e) === selectedAnalysisIndex);
-  if (filtered.length > 0 && !currentStillVisible) {
-    const idx = entries.indexOf(filtered[0]);
-    if (idx !== selectedAnalysisIndex) {
-      setSelectedAnalysisIndex(idx);
-      syncSavedRcaDataFromSelected();
-      renderDataTable();
-    }
-  }
+  renderDataTable();
 }
 
 /** Sets the month filter and refreshes the list */
@@ -267,7 +257,7 @@ window.__setFilterMachine = function(val: string): void {
   applyFilterAndSync();
 };
 
-/** Renders the current sub-tab's section table from the selected analysis data */
+/** Renders ALL filtered analyses as rows in a single table */
 export function renderDataTable(): void {
   const container = document.getElementById('data-table-body');
   if (!container) return;
@@ -275,10 +265,7 @@ export function renderDataTable(): void {
   renderAnalysisFilters();
   updateSubtabDisabled();
 
-  const data = savedRcaData;
-  const hasAnyData = data.captura?.problema || Object.values(data.ishikawa || {}).some(v => v);
-
-  if (!hasAnyData && savedAnalyses.length === 0) {
+  if (savedAnalyses.length === 0) {
     container.innerHTML = `<div class="text-center py-8 text-gray-400">
       <i class="fas fa-database text-3xl mb-3 block"></i>
       <p>No hay análisis guardados.</p>
@@ -287,69 +274,125 @@ export function renderDataTable(): void {
     return;
   }
 
-  const sectionHtml = buildSectionRows(currentDataTab, data);
+  // Filter entries
+  const filtered = savedAnalyses.filter(entry => {
+    const fechaAnalisis = entry.data.captura?.fecha?.[0] || '';
+    if (filterMonth && fechaAnalisis.substring(0, 7) !== filterMonth) return false;
+    if (filterMachine && entry.data.captura?.maquina?.trim() !== filterMachine) return false;
+    return true;
+  });
 
-  // Build extra content based on section
-  let extraHtml = '';
+  // For Plan section, show actions table for each entry separately
+  if (currentDataTab === 'plan') {
+    const allTables = filtered.map((entry, idx) => {
+      const maquina = entry.data.captura?.maquina || 'Sin máquina';
+      const problema = entry.data.captura?.problema || '';
+      const fecha = formatDate(entry.data.captura?.fecha);
+      const acciones = entry.data.acciones || { correctivas: [], preventivas: [] };
+      const planHtml = buildSectionRows('plan', entry.data);
+      return `<div class="mb-4 p-3 bg-base-200/50 rounded-lg border border-base-300">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+            <span class="badge badge-primary badge-sm">#${idx + 1}</span>
+            <span>${escapeHtml(maquina)}</span>
+            <span class="text-base-content/50">•</span>
+            <span class="text-base-content/70">${escapeHtml(problema.substring(0, 40))}</span>
+            <span class="text-base-content/40 text-xs">${escapeHtml(fecha)}</span>
+          </div>
+          <div class="flex gap-1">
+            <button class="btn btn-ghost btn-xs" onclick="window.__exportSinglePDF('${entry.id}')" title="Exportar PDF"><i class="fas fa-file-pdf text-red-500"></i></button>
+            <button class="btn btn-ghost btn-xs" onclick="window.__exportSingleExcel('${entry.id}')" title="Exportar Excel"><i class="fas fa-file-excel text-green-600"></i></button>
+            <button class="btn btn-ghost btn-xs text-red-500" onclick="window.__deleteEntryById('${entry.id}')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        </div>
+        ${planHtml}
+      </div>`;
+    }).join('');
+
+    container.innerHTML = allTables || `<div class="text-center py-6 text-gray-400">Sin resultados con los filtros actuales</div>`;
+    return;
+  }
+
+  // Get headers for current section
+  const headers = getSectionHeaders(currentDataTab);
+
+  // Build header row with # + fields + Diagrama (ishikawa only) + Acciones
+  let extraHeaderCells = '';
   if (currentDataTab === 'ishikawa') {
-    const preview = generateIshikawaPreview(
-      data.ishikawa || {},
-      data.captura?.problema || ''
-    );
-    if (!preview.isEmpty) {
-      extraHtml = `<div class="data-table-ishikawa-preview">
-        <div class="ishikawa-preview-header">
-          <span><i class="fas fa-project-diagram text-blue-600 mr-1"></i> Diagrama de Ishikawa</span>
-        </div>
-        <div class="ishikawa-preview-body">
-          <div class="ishikawa-preview-svg-wrap">
-            <svg viewBox="${preview.viewBox}" xmlns="http://www.w3.org/2000/svg" class="ishikawa-preview-svg">
-              ${preview.svgContent}
-            </svg>
-          </div>
-        </div>
-      </div>`;
-    } else {
-      extraHtml = `<div class="data-table-ishikawa-preview">
-        <div class="ishikawa-preview-header">
-          <span><i class="fas fa-project-diagram text-blue-600 mr-1"></i> Diagrama de Ishikawa</span>
-        </div>
-        <div class="ishikawa-preview-body">
-          <div class="ishikawa-preview-empty">
-            <i class="fas fa-project-diagram"></i>
-            <span>No hay datos de Ishikawa disponibles</span>
-          </div>
-        </div>
-      </div>`;
+    extraHeaderCells = `<th class="w-20 text-center">Diagrama</th>`;
+  }
+  const headerCells = `<th class="w-10 text-center">#</th>` +
+    headers.map(h => `<th>${escapeHtml(h.label)}</th>`).join('') +
+    extraHeaderCells +
+    `<th class="w-28 text-center">Acciones</th>`;
+
+  // Build data rows
+  const rows = filtered.map((entry, idx) => {
+    const cells = headers.map(h => {
+      const display = getEntryDisplayValue(entry, currentDataTab, h.key);
+      return `<td class="text-sm">${display ? escapeHtml(display) : '<span class="text-base-content/30">—</span>'}</td>`;
+    }).join('');
+
+    // Build diagram column cell (ishikawa only)
+    let diagramCell = '';
+    if (currentDataTab === 'ishikawa') {
+      const hasIshikawa = Object.values(entry.data.ishikawa || {}).some(v => v);
+      if (hasIshikawa) {
+        diagramCell = `<td class="text-center">
+          <button class="btn btn-ghost btn-xs btn-square" onclick="window.__viewIshikawaDiagram('${entry.id}')" title="Ver diagrama">
+            <i class="fas fa-project-diagram text-indigo-500"></i>
+          </button>
+        </td>`;
+      } else {
+        diagramCell = `<td class="text-center text-base-content/20"><i class="fas fa-minus"></i></td>`;
+      }
     }
-  }
 
-  container.innerHTML = `<div class="data-section-block">${sectionHtml}</div>${extraHtml}`;
+    // Build action buttons (now without diagram button)
+    let actionBtns = `<button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSinglePDF('${entry.id}')" title="PDF"><i class="fas fa-file-pdf text-red-500"></i></button>
+        <button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSingleExcel('${entry.id}')" title="Excel"><i class="fas fa-file-excel text-green-600"></i></button>
+        <button class="btn btn-ghost btn-xs btn-square text-red-500" onclick="window.__deleteEntryById('${entry.id}')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>`;
 
-  if (getEditingKey()) {
-    requestAnimationFrame(() => {
-      const input = container.querySelector(`[data-key="${getEditingKey()}"] .inline-input`) as HTMLInputElement | null;
-      if (input) input.focus();
-    });
-  }
+    const actions = `<td class="text-center">
+      <div class="flex items-center justify-center gap-1">
+        ${actionBtns}
+      </div>
+    </td>`;
+
+    return `<tr>
+      <td class="text-center text-xs font-mono text-base-content/40">${idx + 1}</td>
+      ${cells}
+      ${diagramCell}
+      ${actions}
+    </tr>`;
+  }).join('');
+
+  let html = `<div class="overflow-x-auto rounded-box border border-base-200">
+    <table class="table table-zebra table-pin-rows w-full">
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rows || '<tr><td colspan="10" class="text-center py-6 text-base-content/40">Sin resultados con los filtros actuales</td></tr>'}</tbody>
+    </table>
+  </div>`;
+
+  // No Ishikawa preview below the table — diagram is viewed per row via the Diagrama column
+
+  container.innerHTML = html;
 }
 
-/** Deletes the currently selected analysis from the saved list */
-window.__deleteCurrentAnalysis = async function(): Promise<void> {
-  if (selectedAnalysisIndex < 0 || selectedAnalysisIndex >= savedAnalyses.length) return;
+/** Deletes an analysis entry by its ID */
+window.__deleteEntryById = async function(entryId: string): Promise<void> {
   const confirmed = await confirmAction('¿Eliminar este análisis permanentemente?');
   if (!confirmed) return;
 
-  const entryId = savedAnalyses[selectedAnalysisIndex].id;
   await deleteAnalysisById(entryId);
 
   // Refresh from the server
   const entries = await loadAnalysis();
   setSavedAnalyses(entries);
 
-  if (entries.length > 0) {
-    setSelectedAnalysisIndex(0);
-  } else {
+  if (entries.length > 0 && selectedAnalysisIndex >= entries.length) {
+    setSelectedAnalysisIndex(entries.length - 1);
+  } else if (entries.length === 0) {
     setSelectedAnalysisIndex(-1);
   }
   syncSavedRcaDataFromSelected();
@@ -357,13 +400,115 @@ window.__deleteCurrentAnalysis = async function(): Promise<void> {
   showToast('Análisis eliminado.', 'success');
 };
 
-/** Needed by the analysis filters */
+/** Exports a single analysis entry as PDF */
+window.__exportSinglePDF = async function(entryId: string): Promise<void> {
+  const entry = savedAnalyses.find(e => e.id === entryId);
+  if (!entry) return;
+  await exportAllPDF([entry]);
+};
+
+/** Exports a single analysis entry as Excel */
+window.__exportSingleExcel = async function(entryId: string): Promise<void> {
+  const entry = savedAnalyses.find(e => e.id === entryId);
+  if (!entry) return;
+  await exportAllExcel([entry]);
+};
+
+/** Opens a full-screen modal showing the Ishikawa diagram for a specific entry */
+window.__viewIshikawaDiagram = function(entryId: string): void {
+  const entry = savedAnalyses.find(e => e.id === entryId);
+  if (!entry) return;
+
+  const ishikawa = entry.data.ishikawa || {};
+  const problema = entry.data.captura?.problema || '';
+
+  const hasData = Object.values(ishikawa).some(v => v && String(v).trim());
+  if (!hasData) {
+    showToast('No hay datos de Ishikawa para este análisis.', 'warning');
+    return;
+  }
+
+  const preview = generateIshikawaPreview(ishikawa, problema);
+  if (preview.isEmpty) {
+    showToast('No hay datos de Ishikawa para este análisis.', 'warning');
+    return;
+  }
+
+  const maquina = entry.data.captura?.maquina || 'Sin máquina';
+  const fecha = formatDate(entry.data.captura?.fecha);
+
+  // Create or reuse modal element
+  let modal = document.getElementById('ishikawa-viewer-modal');
+  if (modal) {
+    modal.remove();
+  }
+
+  modal = document.createElement('div');
+  modal.id = 'ishikawa-viewer-modal';
+  modal.className = 'ish-viewer-overlay';
+  modal.innerHTML = `<div class="ish-viewer-container">
+    <div class="ish-viewer-header">
+      <div class="ish-viewer-title">
+        <i class="fas fa-project-diagram text-indigo-500"></i>
+        <span>Diagrama de Ishikawa</span>
+        <span class="ish-viewer-meta">${escapeHtml(maquina)} • ${escapeHtml(fecha)}</span>
+      </div>
+      <button class="ish-viewer-close" onclick="window.__closeIshikawaViewer()" aria-label="Cerrar">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="ish-viewer-body">
+      <div class="ish-viewer-svg-wrap">
+        <svg viewBox="${preview.viewBox}" xmlns="http://www.w3.org/2000/svg" class="ish-viewer-svg">
+          ${preview.svgContent}
+        </svg>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.appendChild(modal);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    modal.classList.add('open');
+  });
+
+  // Close on overlay click
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      window.__closeIshikawaViewer();
+    }
+  });
+
+  // Close on Escape
+  const escHandler = function(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      window.__closeIshikawaViewer();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+};
+
+/** Closes the Ishikawa diagram viewer modal */
+window.__closeIshikawaViewer = function(): void {
+  const modal = document.getElementById('ishikawa-viewer-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    setTimeout(() => modal.remove(), 300);
+  }
+};
+
+/** Needed by the analysis filters and diagram viewer */
 declare global {
   interface Window {
-    __selectAnalysis: (idx: number) => void;
     __setFilterMonth: (val: string) => void;
     __setFilterMachine: (val: string) => void;
-    __deleteCurrentAnalysis: () => Promise<void>;
+    __deleteEntryById: (entryId: string) => Promise<void>;
+    __exportSinglePDF: (entryId: string) => Promise<void>;
+    __exportSingleExcel: (entryId: string) => Promise<void>;
+    __viewIshikawaDiagram: (entryId: string) => void;
+    __closeIshikawaViewer: () => void;
   }
 }
 

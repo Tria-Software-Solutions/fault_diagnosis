@@ -54,26 +54,48 @@ export async function exportSingleRowPDF(
     grayBorder: [229, 231, 235] as const,
     white: [255, 255, 255] as const,
     green: [22, 163, 74] as const,
+    amber: [217, 119, 6] as const,
+    red: [220, 38, 38] as const,
   };
 
-  // Header
+  const maquina = data.captura?.maquina || '';
+  const fechasArr = data.captura?.fecha || [];
+  const fechasStr = fechasArr.map(d => formatDateDDMMYYYY(d)).join(', ');
+
+  // Header with máquina + fechas
   doc.setFillColor(...colors.navy);
-  doc.rect(0, 0, pw, 22, 'F');
+  doc.rect(0, 0, pw, 26, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('Diagnóstico de Fallas — Reporte Completo', m, 14);
+  const headerTitle = maquina
+    ? `Diagnóstico — ${maquina}`
+    : 'Diagnóstico de Fallas — Reporte Completo';
+  doc.text(headerTitle, m, 11);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(148, 163, 184);
+  const metaParts: string[] = [];
+  if (fechasStr) metaParts.push(`Fecha: ${fechasStr}`);
   const todayISO = new Date().toISOString().split('T')[0];
-  doc.text(`Generado: ${formatDateDDMMYYYY(todayISO)}`, m, 19);
-  y = 30;
+  metaParts.push(`Generado: ${formatDateDDMMYYYY(todayISO)}`);
+  doc.text(metaParts.join('  |  '), m, 19);
+  doc.setDrawColor(...colors.blue);
+  doc.setLineWidth(0.6);
+  doc.line(0, 26, pw, 26);
+  y = 34;
 
   function checkPageBreak(h: number) {
     if (y + h > ph - 15) {
       doc.addPage();
       y = m;
+      doc.setFillColor(...colors.navy);
+      doc.rect(0, 0, pw, 14, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(maquina ? `Diagnóstico — ${maquina} (cont.)` : 'Diagnóstico (cont.)', m, 9);
+      y = 18;
     }
   }
 
@@ -111,7 +133,7 @@ export async function exportSingleRowPDF(
     } else {
       doc.text(value, m + 4 + lw + 4, y);
     }
-    y += 5;
+    y += 4;
   }
 
   // ── 1. CAPTURA ──
@@ -119,8 +141,7 @@ export async function exportSingleRowPDF(
   const cap = data.captura || {};
   addField('Máquina / Equipo:', cap.maquina || '');
   addField('Problema:', cap.problema || '');
-  const fechasStr = (cap.fecha || []).map(d => formatDateDDMMYYYY(d)).join(', ');
-  addField('Fecha:', fechasStr);
+  addField('Fecha(s):', fechasStr);
   addField('Tiempo de paro:', cap.tiempoParo || '');
   addField('Indicador afectado:', cap.indicador || '');
   addField('Síntomas:', cap.sintomas || '');
@@ -142,22 +163,21 @@ export async function exportSingleRowPDF(
   if (hasIshikawa) {
     checkPageBreak(170);
     const img = createSimplifiedIshikawa(ish, data.captura?.problema || '');
-    if (img && img.imgData) {
-      const iw = 170;
-      const ih = (img.height / img.width) * iw;
-      doc.addImage(img.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
-      y += ih + 6;
+    if (img && img.imgData) {const iw = 190;
+        const ih = (img.height / img.width) * iw;
+        doc.addImage(img.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
+        y += ih + 6;
+      }
     }
-  }
 
-  // ── 3. 5 WHYS ──
-  addSectionTitle('3. Análisis de 5 Porqués');
-  const whys = data.whys || {};
-  for (let i = 1; i <= 5; i++) {
-    const val = (whys[`why${i}` as keyof typeof whys] as string) || '';
-    addField(`¿Por qué #${i}?:`, val);
+    // ── 3. 5 WHYS ──
+    addSectionTitle('3. Análisis de 5 Porqués');
+    const whys = data.whys || {};
+    for (let i = 1; i <= 5; i++) {
+      const val = (whys[`why${i}` as keyof typeof whys] as string) || '';
+      if (val) addField(`¿Por qué #${i}?:`, val);
   }
-  const causaRaiz = whys.causaRaiz || '';
+  const causaRaiz = whys.causaRaiz;
   if (causaRaiz) {
     checkPageBreak(10);
     doc.setFillColor(240, 253, 244);
@@ -165,7 +185,10 @@ export async function exportSingleRowPDF(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...colors.green);
-    doc.text('Causa Raíz: ' + causaRaiz, m + 10, y + 7);
+    doc.text('Causa Raíz:', m + 10, y + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...colors.slateDark);
+    doc.text(causaRaiz, m + 10 + doc.getTextWidth('Causa Raíz:') + 2, y + 7);
     y += 14;
   }
 
@@ -179,44 +202,70 @@ export async function exportSingleRowPDF(
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...labelColor);
     doc.text(label, m + 4, y);
-    y += 7;
+    y += 6;
 
     if (list.length === 0) {
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
-      doc.setTextColor(148, 163, 184);
-      doc.text('Sin acciones registradas.', m + 8, y);
-      y += 6;
       return;
     }
 
     list.forEach((accion, i) => {
-      checkPageBreak(20);
+      checkPageBreak(22);
       doc.setFillColor(...colors.white);
       doc.setDrawColor(...colors.grayBorder);
       doc.roundedRect(m + 4, y, cw - 8, 16, 3, 3, 'FD');
-      doc.setFontSize(8);
+      doc.setFontSize(8.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...colors.slateDark);
-      doc.text(`${i + 1}. ${accion.descripcion || ''}`, m + 10, y + 6);
+      const desc = `${i + 1}. ${accion.descripcion || ''}`;
+      doc.text(desc, m + 10, y + 6);
       let dx = m + 10;
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...colors.slate);
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       if (accion.responsable) {
         const rtxt = `Resp: ${accion.responsable}`;
         doc.text(rtxt, dx, y + 12);
-        dx += doc.getTextWidth(rtxt) + 6;
+        dx += doc.getTextWidth(rtxt) + 8;
       }
       if (accion.fecha) {
         doc.text(`Fecha: ${accion.fecha}`, dx, y + 12);
+      }
+      if (accion.prioridad) {
+        drawPriorityBadge(m + cw - 24, y + 8, accion.prioridad);
       }
       y += 20;
     });
   }
 
+  function drawPriorityBadge(x: number, cy: number, prioridad: string) {
+    const map: Record<string, readonly [number, number, number]> = { alta: colors.red, media: colors.amber, baja: colors.green };
+    const c = map[prioridad] || colors.slate;
+    doc.setFillColor(...c);
+    doc.roundedRect(x, cy - 2.5, 14, 6, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(prioridad.toUpperCase(), x + 7, cy + 0.5, { align: 'center' });
+  }
+
   renderActions(acciones.correctivas, 'Acciones Correctivas', colors.green);
   renderActions(acciones.preventivas, 'Acciones Preventivas', colors.blue);
+
+  // ── 5. PARETO ──
+  if (maquina) {
+    const paretoItems = getAccumulatedParetoData(maquina);
+    if (paretoItems.length > 0) {
+      addSectionTitle('5. Análisis de Pareto');
+      checkPageBreak(170);
+      const paretoImg = createSimplifiedPareto(paretoItems);
+      if (paretoImg && paretoImg.imgData) {
+        const iw = 190;
+        const ih = (paretoImg.height / paretoImg.width) * iw;
+        doc.addImage(paretoImg.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
+        y += ih + 6;
+      }
+    }
+  }
 
   // Footer
   const fy = ph - 10;
@@ -231,6 +280,33 @@ export async function exportSingleRowPDF(
   const fechas = data.captura?.fecha;
   const filename = buildIndividualFilename(machine, fechas, 'pdf');
   doc.save(filename);
+}
+
+/** Builds a descriptive filename for general exports: Diagnostico_General_{count}_{date_range}.{ext} */
+function buildGeneralFilename(analyses: Array<{ id: string; savedAt: string; data: RCAData }>, ext: string): string {
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
+  const parts = ['Diagnostico_General'];
+  parts.push(String(analyses.length) + '_analisis');
+  const dates: string[] = [];
+  analyses.forEach(a => {
+    const capFecha = a.data.captura?.fecha;
+    if (capFecha && capFecha.length > 0) {
+      capFecha.forEach(d => {
+        if (d) dates.push(d);
+      });
+    }
+  });
+  if (dates.length > 0) {
+    const sorted = [...new Set(dates)].sort();
+    const first = formatDateDDMMYYYY(sorted[0]);
+    const last = sorted.length > 1 ? formatDateDDMMYYYY(sorted[sorted.length - 1]) : '';
+    if (last && last !== first) {
+      parts.push(first + '_a_' + last);
+    } else {
+      parts.push(first);
+    }
+  }
+  return sanitize(parts.join('_')) + '.' + ext;
 }
 
 /** Exports ALL saved analyses from the file as a single multi-page PDF */
@@ -255,6 +331,8 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
     grayBorder: [229, 231, 235] as const,
     white: [255, 255, 255] as const,
     green: [22, 163, 74] as const,
+    amber: [217, 119, 6] as const,
+    red: [220, 38, 38] as const,
   };
 
   for (let idx = 0; idx < analyses.length; idx++) {
@@ -263,32 +341,47 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
     const analysis = analyses[idx];
     const data = analysis.data;
     let y = m;
+    const maquina = data.captura?.maquina || '';
+    const fechasStr = (data.captura?.fecha || []).map(d => formatDateDDMMYYYY(d)).join(', ');
 
-    // Page header
+    // Page header — shows máquina + fechas inline
     doc.setFillColor(...colors.navy);
-    doc.rect(0, 0, pw, 22, 'F');
+    doc.rect(0, 0, pw, 26, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Diagnóstico #${idx + 1} — Reporte Completo`, m, 14);
+    const headerTitle = maquina
+      ? `Diagnóstico #${idx + 1} — ${maquina}`
+      : `Diagnóstico #${idx + 1} — Reporte Completo`;
+    doc.text(headerTitle, m, 11);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(148, 163, 184);
-    doc.text(`Guardado: ${analysis.savedAt ? formatDateDDMMYYYY(analysis.savedAt.split('T')[0]) : '—'}`, m, 19);
-    y = 30;
+    const metaParts: string[] = [];
+    if (fechasStr) metaParts.push(`Fecha: ${fechasStr}`);
+    if (analysis.savedAt) metaParts.push(`Guardado: ${formatDateDDMMYYYY(analysis.savedAt.split('T')[0])}`);
+    doc.text(metaParts.join('  |  '), m, 19);
+    // Blue accent line
+    doc.setDrawColor(...colors.blue);
+    doc.setLineWidth(0.6);
+    doc.line(0, 26, pw, 26);
+    y = 34;
 
     function checkPageBreak(h: number) {
       if (y + h > ph - 15) {
         doc.addPage();
         y = m;
-        // Re-draw header on new page
+        // Re-draw slim header on new page
         doc.setFillColor(...colors.navy);
-        doc.rect(0, 0, pw, 12, 'F');
+        doc.rect(0, 0, pw, 14, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
-        doc.text(`Diagnóstico #${idx + 1} (cont.)`, m, 8);
-        y = 16;
+        const contTitle = maquina
+          ? `Diagnóstico #${idx + 1} — ${maquina} (cont.)`
+          : `Diagnóstico #${idx + 1} (cont.)`;
+        doc.text(contTitle, m, 9);
+        y = 18;
       }
     }
 
@@ -303,6 +396,21 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
       doc.setFont('helvetica', 'bold');
       doc.text(t, m + 10, y + 7);
       y += 14;
+    }
+
+    function addTextBlock(text: string, fontSize = 9, fontStyle: 'normal' | 'bold' | 'italic' = 'normal', textColor: readonly [number, number, number] = colors.slate) {
+      if (!text) return;
+      doc.setFontSize(fontSize);
+      doc.setFont('helvetica', fontStyle);
+      doc.setTextColor(...textColor);
+      const lines = doc.splitTextToSize(text, cw - 8);
+      const lh = fontSize * 0.38;
+      checkPageBreak(lines.length * lh + 4);
+      lines.forEach((line: string) => {
+        doc.text(line, m + 4, y);
+        y += lh;
+      });
+      y += 1;
     }
 
     function addField(label: string, value: string) {
@@ -326,7 +434,18 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
       } else {
         doc.text(value, m + 4 + lw + 4, y);
       }
-      y += 5;
+      y += 4;
+    }
+
+    function drawPriorityBadge(x: number, cy: number, prioridad: string) {
+      const map: Record<string, readonly [number, number, number]> = { alta: colors.red, media: colors.amber, baja: colors.green };
+      const c = map[prioridad] || colors.slate;
+      doc.setFillColor(...c);
+      doc.roundedRect(x, cy - 2.5, 14, 6, 2, 2, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text(prioridad.toUpperCase(), x + 7, cy + 0.5, { align: 'center' });
     }
 
     // ── 1. CAPTURA ──
@@ -335,7 +454,7 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
     addField('Máquina / Equipo:', cap.maquina || '');
     addField('Problema:', cap.problema || '');
     const fechas = (cap.fecha || []).map(d => formatDateDDMMYYYY(d)).join(', ');
-    addField('Fecha:', fechas);
+    addField('Fecha(s):', fechas);
     addField('Tiempo de paro:', cap.tiempoParo || '');
     addField('Indicador afectado:', cap.indicador || '');
     addField('Síntomas:', cap.sintomas || '');
@@ -359,7 +478,7 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
       checkPageBreak(170);
       const img = createSimplifiedIshikawa(ish, data.captura?.problema || '');
       if (img && img.imgData) {
-        const iw = 170;
+        const iw = 190;
         const ih = (img.height / img.width) * iw;
         doc.addImage(img.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
         y += ih + 6;
@@ -371,9 +490,9 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
     const whys_data = data.whys || {};
     for (let i = 1; i <= 5; i++) {
       const val = (whys_data[`why${i}` as keyof typeof whys_data] as string) || '';
-      addField(`¿Por qué #${i}?:`, val);
+      if (val) addField(`¿Por qué #${i}?:`, val);
     }
-    const causaRaiz = whys_data.causaRaiz || '';
+    const causaRaiz = whys_data.causaRaiz;
     if (causaRaiz) {
       checkPageBreak(10);
       doc.setFillColor(240, 253, 244);
@@ -381,7 +500,10 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...colors.green);
-      doc.text('Causa Raíz: ' + causaRaiz, m + 10, y + 7);
+      doc.text('Causa Raíz:', m + 10, y + 7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...colors.slateDark);
+      doc.text(causaRaiz, m + 10 + doc.getTextWidth('Causa Raíz:') + 2, y + 7);
       y += 14;
     }
 
@@ -395,37 +517,36 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...labelColor);
       doc.text(label, m + 4, y);
-      y += 7;
+      y += 6;
 
       if (list.length === 0) {
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(148, 163, 184);
-        doc.text('Sin acciones registradas.', m + 8, y);
-        y += 6;
         return;
       }
 
       list.forEach((accion, i) => {
-        checkPageBreak(20);
+        checkPageBreak(22);
         doc.setFillColor(...colors.white);
         doc.setDrawColor(...colors.grayBorder);
         doc.roundedRect(m + 4, y, cw - 8, 16, 3, 3, 'FD');
-        doc.setFontSize(8);
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...colors.slateDark);
-        doc.text(`${i + 1}. ${accion.descripcion || ''}`, m + 10, y + 6);
+        const desc = `${i + 1}. ${accion.descripcion || ''}`;
+        doc.text(desc, m + 10, y + 6);
         let dx = m + 10;
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...colors.slate);
-        doc.setFontSize(7);
+        doc.setFontSize(7.5);
         if (accion.responsable) {
           const rtxt = `Resp: ${accion.responsable}`;
           doc.text(rtxt, dx, y + 12);
-          dx += doc.getTextWidth(rtxt) + 6;
+          dx += doc.getTextWidth(rtxt) + 8;
         }
         if (accion.fecha) {
           doc.text(`Fecha: ${accion.fecha}`, dx, y + 12);
+        }
+        if (accion.prioridad) {
+          drawPriorityBadge(m + cw - 24, y + 8, accion.prioridad);
         }
         y += 20;
       });
@@ -433,6 +554,22 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
 
     renderActions(acciones.correctivas, 'Acciones Correctivas', colors.green);
     renderActions(acciones.preventivas, 'Acciones Preventivas', colors.blue);
+
+    // ── 5. PARETO ──
+    if (maquina) {
+      const paretoItems = getAccumulatedParetoData(maquina);
+      if (paretoItems.length > 0) {
+        addSectionTitle('5. Análisis de Pareto');
+        checkPageBreak(170);
+        const paretoImg = createSimplifiedPareto(paretoItems);
+        if (paretoImg && paretoImg.imgData) {
+          const iw = 190;
+          const ih = (paretoImg.height / paretoImg.width) * iw;
+          doc.addImage(paretoImg.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
+          y += ih + 6;
+        }
+      }
+    }
 
     // Page footer
     const fy = ph - 10;
@@ -444,7 +581,8 @@ export async function exportAllPDF(analyses: Array<{ id: string; savedAt: string
     doc.text(`Diagnóstico #${idx + 1} de ${analyses.length} — Herramienta de Diagnóstico de Fallas`, pw / 2, fy + 6, { align: 'center' });
   }
 
-  doc.save('Diagnostico_General.pdf');
+  const filename = buildGeneralFilename(analyses, 'pdf');
+  doc.save(filename);
   showToast(`${analyses.length} análisis exportados a PDF.`, 'success');
 }
 
@@ -706,7 +844,7 @@ async function exportPDF(
       const problema = captura.problema || '';
       const img = createSimplifiedIshikawa(ishikawa, problema);
       if (img && img.imgData) {
-        const iw = 170;
+        const iw = 190;
         const ih = (img.height / img.width) * iw;
         doc.addImage(img.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
         y += ih + 6;
@@ -780,7 +918,7 @@ async function exportPDF(
         checkPageBreak(170);
         const paretoImg = createSimplifiedPareto(paretoItems);
         if (paretoImg && paretoImg.imgData) {
-          const iw = 170;
+          const iw = 190;
           const ih = (paretoImg.height / paretoImg.width) * iw;
           doc.addImage(paretoImg.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
           y += ih + 6;
@@ -810,7 +948,7 @@ async function exportPDF(
         const histImg = createSimplifiedIshikawa(entry.ishikawa, entry.problema);
         if (histImg && histImg.imgData) {
           checkPageBreak(170);
-          const iw = 170;
+          const iw = 190;
           const ih = (histImg.height / histImg.width) * iw;
           doc.addImage(histImg.imgData, 'PNG', (pw - iw) / 2, y, iw, ih);
           y += ih + 8;
@@ -955,19 +1093,23 @@ function countWrapLinesSmart(
   return lines;
 }
 
-/** Generates an Ishikawa diagram image on a canvas — modern, no text cut off */
+/** Generates an Ishikawa diagram image on a canvas — professional fishbone, full text readable */
 export function createSimplifiedIshikawa(
   ishikawaData?: RCAIshikawa,
   problemaText?: string
 ): IshikawaImageResult | null {
   const canvas = document.createElement('canvas');
-  const CANVAS_W = 1100;
+  const CANVAS_W = 1600;
   canvas.width = CANVAS_W;
-  let canvasH = 460;
-  const ctx = canvas.getContext('2d');
+  let canvasH = 580;
+  const ctx = canvas.getContext('2d')!;
   if (!ctx) return null;
 
-  ctx.fillStyle = '#ffffff';
+  // Background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, 500);
+  bgGrad.addColorStop(0, '#f8fafc');
+  bgGrad.addColorStop(1, '#ffffff');
+  ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, canvas.width, canvasH);
 
   const categories = CATEGORY_ORDER.map(key => ({
@@ -980,35 +1122,41 @@ export function createSimplifiedIshikawa(
 
   const hasData = categories.some(c => c.value);
   if (!hasData) {
-    ctx.font = '12px Arial';
-    ctx.fillStyle = '#666666';
-    ctx.fillText('No hay datos de Ishikawa disponibles', 370, 210);
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText('No hay datos de Ishikawa disponibles', CANVAS_W / 2, 280);
     const scNoData = upscaleCanvas(canvas, 4);
     return { imgData: scNoData.toDataURL(), width: scNoData.width, height: scNoData.height };
   }
 
-  // ── Layout constants ──
-  const CARD_W = 150;
+  // ═══════════════════════════════════════════════
+  //  LAYOUT CONSTANTS — larger & roomier
+  // ═══════════════════════════════════════════════
+
+  const CARD_W = 220;           // wider cards for long text
   const CARD_R = 10;
-  const HEADER_H = 30;
-  const CONTENT_PAD = 38;
-  const CONTENT_BOT = 10;
-  const MIN_CARD_H = 100;
-  const LINE_H = 13;
-  const CARD_TEXT_MAX_W = CARD_W - 16;
+  const HEADER_H = 36;
+  const CONTENT_PAD = 48;
+  const CONTENT_BOT = 14;
+  const MIN_CARD_H = 120;
+  const LINE_H = 17;            // bigger line-height
+  const CARD_TEXT_MAX_W = CARD_W - 24;
+  const FONT_SIZE_CARD = '12px Arial, sans-serif';
+  const FONT_SIZE_HEADER = 'bold 14px Arial, sans-serif';
 
-  // Column positions (3 columns for 6 categories)
-  const colCenters = [140, 360, 580];
-  const cardUpperXs = [65, 285, 505];
-  const cardLowerXs = [65, 285, 505];
-  const contactXs = [250, 470, 690];
+  // 3 columns, more spread out
+  const colCenters = [180, 470, 760];
+  const cardUpperXs = [70, 360, 650];
+  const cardLowerXs = [70, 360, 650];
+  const contactXs = [310, 600, 890];
 
-  const spineY = 230;
+  const spineY = 290;
   const upperCardY = 30;
-  const lowerCardY = 328;
+  const lowerCardY = 418;
 
-  // ── Calculate card heights dynamically ──
-  ctx.font = '9px Arial, sans-serif';
+  // ── Dynamic card heights ──
+  ctx.font = FONT_SIZE_CARD;
   const cardHeights = categories.map(cat => {
     if (!cat.value) return MIN_CARD_H;
     const lines = countWrapLinesSmart(ctx, cat.value, CARD_TEXT_MAX_W);
@@ -1016,13 +1164,13 @@ export function createSimplifiedIshikawa(
     return Math.max(MIN_CARD_H, HEADER_H + CONTENT_PAD + contentH + CONTENT_BOT);
   });
 
-  // Determine vertical shift based on upper cards
+  // Dynamic spine position based on upper cards
   let maxUpperBottom = 0;
   cardHeights.slice(0, 3).forEach(h => {
     maxUpperBottom = Math.max(maxUpperBottom, upperCardY + h);
   });
 
-  const MIN_GAP = 36;
+  const MIN_GAP = 40;
   let spineShift = 0;
   if (maxUpperBottom + MIN_GAP > spineY) {
     spineShift = maxUpperBottom + MIN_GAP - spineY;
@@ -1030,86 +1178,107 @@ export function createSimplifiedIshikawa(
   const newSpineY = spineY + spineShift;
   const newLowerY = lowerCardY + spineShift;
 
-  // Ensure canvas height fits both upper and lower cards + margins
+  // Grow canvas height to fit
   cardHeights.slice(0, 3).forEach(h => {
-    const bottom = upperCardY + h + 30;
+    const bottom = upperCardY + h + 40;
     if (bottom > canvasH) canvasH = bottom;
   });
   cardHeights.slice(3, 6).forEach(h => {
-    const bottom = newLowerY + h + 30;
+    const bottom = newLowerY + h + 40;
     if (bottom > canvasH) canvasH = bottom;
   });
 
-  // ── Problem box sizing ──
-  const pbW = 260;
+  // ── Problem box ──
+  const pbW = 320;
   const problema =
     problemaText ||
     (document.getElementById('descripcionProblema') as HTMLTextAreaElement)?.value?.trim() ||
     'No definido';
-  ctx.font = '11px Arial, sans-serif';
-  const pbLines = countWrapLinesSmart(ctx, problema, pbW - 30);
-  const pbContentH = pbLines * 15;
-  const pbH = Math.max(110, 50 + pbContentH);
-  const pbX = CANVAS_W - pbW - 30;
-  const pbY = Math.max(newSpineY - Math.floor(pbH / 2) + 10, upperCardY + 10);
-  const pbBottom = pbY + pbH + 30;
+  ctx.font = '13px Arial, sans-serif';
+  const pbLines = countWrapLinesSmart(ctx, problema, pbW - 36);
+  const pbContentH = pbLines * 18;
+  const pbH = Math.max(130, 60 + pbContentH);
+  const pbX = CANVAS_W - pbW - 36;
+  const pbY = Math.max(newSpineY - Math.floor(pbH / 2) + 10, upperCardY + 20);
+  const pbBottom = pbY + pbH + 40;
   if (pbBottom > canvasH) canvasH = pbBottom;
 
-  // ── Set final canvas height and redraw background ──
+  // ── Finalise canvas ──
   canvas.height = canvasH;
-  ctx.fillStyle = '#ffffff';
+  // Re-draw background for full height
+  const bgGrad2 = ctx.createLinearGradient(0, 0, 0, canvasH);
+  bgGrad2.addColorStop(0, '#f8fafc');
+  bgGrad2.addColorStop(1, '#ffffff');
+  ctx.fillStyle = bgGrad2;
   ctx.fillRect(0, 0, canvas.width, canvasH);
   ctx.lineCap = 'round';
 
-  // ── Fish tail ──
+  // ═══════════════════════════════════════════════
+  //  DRAW FISHBONE
+  // ═══════════════════════════════════════════════
+
+  // ── Shadow helper ──
+  function cardShadow(x: number, y: number, w: number, h: number, r: number) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.08)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#ffffff';
+    roundRect(ctx, x + 1, y + 2, w, h, r);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Fish tail (navy) ──
   ctx.strokeStyle = '#1e3a5f';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(130, newSpineY);
+  ctx.lineTo(80, newSpineY - 48);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(130, newSpineY);
+  ctx.lineTo(80, newSpineY + 48);
+  ctx.stroke();
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(110, newSpineY);
-  ctx.lineTo(70, newSpineY - 38);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(110, newSpineY);
-  ctx.lineTo(70, newSpineY + 38);
-  ctx.stroke();
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(70, newSpineY - 38);
-  ctx.lineTo(70, newSpineY + 38);
+  ctx.moveTo(80, newSpineY - 48);
+  ctx.lineTo(80, newSpineY + 48);
   ctx.stroke();
 
   // ── Spine ──
   ctx.strokeStyle = '#1e3a5f';
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(110, newSpineY);
-  // Spine ends just before the problem box
-  const spineEnd = pbX - 10;
+  ctx.moveTo(130, newSpineY);
+  const spineEnd = pbX - 16;
   ctx.lineTo(spineEnd, newSpineY);
   ctx.stroke();
 
-  // Arrow tip
-  ctx.fillStyle = '#1e3a5f';
+  // ── Arrow tip (towards problem box) ──
+  ctx.fillStyle = '#2563eb';
   ctx.beginPath();
   ctx.moveTo(spineEnd, newSpineY);
-  ctx.lineTo(spineEnd - 8, newSpineY - 6);
-  ctx.lineTo(spineEnd - 8, newSpineY + 6);
+  ctx.lineTo(spineEnd - 12, newSpineY - 8);
+  ctx.lineTo(spineEnd - 12, newSpineY + 8);
   ctx.closePath();
   ctx.fill();
 
   // ── Contact marks ──
   ctx.strokeStyle = '#1e3a5f';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   contactXs.forEach(x => {
-    ctx.moveTo(x, newSpineY - 8);
-    ctx.lineTo(x, newSpineY + 8);
+    ctx.moveTo(x, newSpineY - 10);
+    ctx.lineTo(x, newSpineY + 10);
   });
   ctx.stroke();
 
-  // ── Branches ──
+  // ── Branches (blue) ──
   ctx.strokeStyle = '#3b82f6';
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
   categories.slice(0, 3).forEach((_cat, i) => {
     const ch = cardHeights[i];
     const branchY1 = upperCardY + ch;
@@ -1126,6 +1295,11 @@ export function createSimplifiedIshikawa(
   });
 
   // ── Cards ──
+  const catColors: Record<string, string> = {
+    maquina: '#dbeafe', metodo: '#dcfce7', materiales: '#fef3c7',
+    manoObra: '#fce7f3', medicion: '#ede9fe', medioAmbiente: '#ccfbf1'
+  };
+
   categories.forEach((cat, i) => {
     const isUpper = i < 3;
     const x = isUpper ? cardUpperXs[i] : cardLowerXs[i - 3];
@@ -1133,80 +1307,94 @@ export function createSimplifiedIshikawa(
     const h = cardHeights[i];
     const hasContent = !!cat.value;
 
-    // Card background & border
+    // Shadow
+    cardShadow(x, cy, CARD_W, h, CARD_R);
+
+    // Card fill
     ctx.lineWidth = 1.5;
-    if (hasContent) {
-      ctx.fillStyle = '#e0f2fe';
-      ctx.strokeStyle = '#3b82f6';
-    } else {
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#d1d5db';
-    }
+    ctx.fillStyle = catColors[cat.key] || '#f1f5f9';
+    ctx.strokeStyle = hasContent ? '#3b82f6' : '#cbd5e1';
     roundRect(ctx, x, cy, CARD_W, h, CARD_R);
     ctx.fill();
     ctx.stroke();
 
-    // Category header separator
-    ctx.strokeStyle = '#e2e8f0';
+    // Header separator
+    ctx.strokeStyle = hasContent ? '#93c5fd' : '#e2e8f0';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x + 8, cy + 30);
-    ctx.lineTo(x + CARD_W - 8, cy + 30);
+    ctx.moveTo(x + 12, cy + HEADER_H);
+    ctx.lineTo(x + CARD_W - 12, cy + HEADER_H);
     ctx.stroke();
 
     // Category label
     ctx.fillStyle = '#1e3a5f';
-    ctx.font = 'bold 12px Arial, sans-serif';
+    ctx.font = FONT_SIZE_HEADER;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(cat.label, x + CARD_W / 2, cy + 16);
+    ctx.fillText(cat.label, x + CARD_W / 2, cy + 18);
 
-    // Check mark if content
+    // Content text
     if (hasContent) {
-      ctx.fillStyle = '#3b82f6';
-      ctx.font = '16px Arial, sans-serif';
-      ctx.textAlign = 'right';
+      ctx.fillStyle = '#1e40af';
+      ctx.font = FONT_SIZE_CARD;
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('\u2713', x + CARD_W - 6, cy + 6);
-    }
-
-    // Category content text
-    ctx.fillStyle = hasContent ? '#1e40af' : '#9ca3af';
-    ctx.font = hasContent ? '9px Arial, sans-serif' : 'italic 9px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    if (hasContent) {
-      wrapCanvasTextSmart(ctx, cat.value, x + 8, cy + 38, CARD_TEXT_MAX_W, LINE_H);
+      wrapCanvasTextSmart(ctx, cat.value, x + 12, cy + CONTENT_PAD, CARD_TEXT_MAX_W, LINE_H);
     } else {
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = 'italic 12px Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Sin datos', x + CARD_W / 2, cy + h / 2 + 10);
+      ctx.fillText('—', x + CARD_W / 2, cy + h / 2 + 6);
     }
   });
 
   // ── Problem box ──
+  // Shadow
+  ctx.save();
+  ctx.shadowColor = 'rgba(30, 58, 95, 0.25)';
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 4;
   ctx.fillStyle = '#1e3a5f';
-  roundRect(ctx, pbX, pbY, pbW, pbH, 12);
+  roundRect(ctx, pbX, pbY, pbW, pbH, 14);
+  ctx.fill();
+  ctx.restore();
+
+  // Re-draw on top (shadow was for the background only)
+  ctx.fillStyle = '#1e3a5f';
+  roundRect(ctx, pbX, pbY, pbW, pbH, 14);
   ctx.fill();
 
+  // Problem box inner glow
+  const pbGrad = ctx.createLinearGradient(pbX, pbY, pbX, pbY + pbH);
+  pbGrad.addColorStop(0, 'rgba(255,255,255,0.08)');
+  pbGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = pbGrad;
+  roundRect(ctx, pbX, pbY, pbW, pbH, 14);
+  ctx.fill();
+
+  // Title
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 11px Arial, sans-serif';
+  ctx.font = 'bold 14px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText('PROBLEMA', pbX + pbW / 2, pbY + 16);
+  ctx.fillText('PROBLEMA', pbX + pbW / 2, pbY + 18);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  // Separator line
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(pbX + 24, pbY + 32);
-  ctx.lineTo(pbX + pbW - 24, pbY + 32);
+  ctx.moveTo(pbX + 28, pbY + 38);
+  ctx.lineTo(pbX + pbW - 28, pbY + 38);
   ctx.stroke();
 
+  // Problem text
   ctx.fillStyle = '#93c5fd';
-  ctx.font = '11px Arial, sans-serif';
+  ctx.font = '13px Arial, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  wrapCanvasTextSmart(ctx, problema, pbX + 15, pbY + 40, pbW - 30, 15);
+  wrapCanvasTextSmart(ctx, problema, pbX + 18, pbY + 48, pbW - 36, 18);
 
   const scIshikawa = upscaleCanvas(canvas, 4);
   return { imgData: scIshikawa.toDataURL(), width: scIshikawa.width, height: scIshikawa.height };

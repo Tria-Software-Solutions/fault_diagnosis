@@ -341,7 +341,22 @@ export function updateIshikawaGenerateBtn(): void {
   });
   const btn = document.getElementById('btn-generar-ishikawa') as HTMLButtonElement | null;
   const area = document.getElementById('ishikawa-generate-area');
-  if (btn) btn.disabled = !allFilled;
+  if (btn) {
+    btn.disabled = !allFilled;
+    // Reset to "Generar diagrama" mode if a category was edited after generation
+    if (allFilled && btn.getAttribute('data-generated') === 'true') {
+      // Only reset if the SVG was cached — meaning it was generated before
+    } else if (!allFilled) {
+      btn.removeAttribute('data-generated');
+      const icon = btn.querySelector('i');
+      if (icon) icon.className = 'fas fa-sync-alt';
+      const textSpan = document.getElementById('btn-ishikawa-text');
+      if (textSpan) textSpan.textContent = 'Generar diagrama';
+      btn.onclick = function() { window.__generateIshikawa(); };
+      const infoText = document.getElementById('ish-generate-info-text');
+      if (infoText) infoText.textContent = 'Completa las 6 categorías para generar el diagrama';
+    }
+  }
   if (area) area.classList.toggle('ready', allFilled);
 }
 

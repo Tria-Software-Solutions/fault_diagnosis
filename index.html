@@ -211,112 +211,13 @@
             <div class="ish-generate-inner">
               <div class="ish-generate-info">
                 <i class="fas fa-project-diagram"></i>
-                <span>Completa las 6 categorías para generar el diagrama</span>
+                <span id="ish-generate-info-text">Completa las 6 categorías para generar el diagrama</span>
               </div>
               <button id="btn-generar-ishikawa" class="btn btn-primary" onclick="window.__generateIshikawa()" disabled>
                 <i class="fas fa-sync-alt"></i>
-                Generar diagrama
+                <span id="btn-ishikawa-text">Generar diagrama</span>
               </button>
             </div>
-          </div>
-
-          <div id="ishikawa-diagram" class="ishikawa-svg-wrap mt-6 hidden">
-            <svg viewBox="0 0 1000 1020" xmlns="http://www.w3.org/2000/svg" class="ishikawa-svg">
-              <defs>
-                <filter id="ish-shadow" x="-4" y="-4" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.08)"/>
-                </filter>
-                <filter id="ish-shadow-box" x="-4" y="-4" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(37,99,235,0.12)"/>
-                </filter>
-                <linearGradient id="ish-problem-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#1e3a5f"/>
-                  <stop offset="100%" stop-color="#2563eb"/>
-                </linearGradient>
-                <marker id="ish-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                  <polygon points="0 0, 10 3.5, 0 7" fill="#1e3a5f"/>
-                </marker>
-              </defs>
-              <!-- Background card -->
-              <rect x="10" y="10" width="980" height="1000" rx="16" fill="white" opacity="0.5"/>
-              <!-- Spine Tail (fish tail) -->
-              <path d="M 85 460 L 40 410 L 40 510 Z" fill="#1e3a5f" opacity="0.85"/>
-              <line x1="85" y1="460" x2="40" y2="510" stroke="#1e3a5f" stroke-width="3" stroke-linecap="round"/>
-              <line x1="85" y1="460" x2="40" y2="410" stroke="#1e3a5f" stroke-width="3" stroke-linecap="round"/>
-              <!-- Spine (central backbone) -->
-              <line x1="85" y1="460" x2="762" y2="460" stroke="#1e3a5f" stroke-width="5" stroke-linecap="round" marker-end="url(#ish-arrow)"/>
-              <line x1="85" y1="459" x2="762" y2="459" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
-              <!-- Spine contact marks -->
-              <line x1="205" y1="452" x2="205" y2="468" stroke="#1e3a5f" stroke-width="2"/>
-              <line x1="400" y1="452" x2="400" y2="468" stroke="#1e3a5f" stroke-width="2"/>
-              <line x1="595" y1="452" x2="595" y2="468" stroke="#1e3a5f" stroke-width="2"/>
-              <!-- Upper bones (ribs) -->
-              <line id="ishikawa-branch-maquina" x1="115" y1="246" x2="205" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line id="ishikawa-branch-metodo" x1="310" y1="246" x2="400" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line id="ishikawa-branch-materiales" x1="505" y1="246" x2="595" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <!-- Lower bones (ribs) -->
-              <line x1="115" y1="674" x2="205" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line x1="310" y1="674" x2="400" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <line x1="505" y1="674" x2="595" y2="460" stroke="#475569" stroke-width="3" stroke-linecap="round"/>
-              <g id="ishikawa-label-maquina" class="ish-label-group" onclick="window.__editCategory('maquina')">
-                <foreignObject x="35" y="48" width="170" height="24">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-cog"></i> Máquina</div>
-                </foreignObject>
-                <foreignObject x="35" y="72" width="170" height="160">
-                  <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-maquina" class="ish-bone-content"></div>
-                </foreignObject>
-              </g>
-              <g id="ishikawa-label-metodo" class="ish-label-group" onclick="window.__editCategory('metodo')">
-                <foreignObject x="230" y="48" width="170" height="24">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-clipboard-list"></i> Método</div>
-                </foreignObject>
-                <foreignObject x="230" y="72" width="170" height="160">
-                  <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-metodo" class="ish-bone-content"></div>
-                </foreignObject>
-              </g>
-              <g id="ishikawa-label-materiales" class="ish-label-group" onclick="window.__editCategory('materiales')">
-                <foreignObject x="425" y="48" width="170" height="24">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-box"></i> Materiales</div>
-                </foreignObject>
-                <foreignObject x="425" y="72" width="170" height="160">
-                  <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-materiales" class="ish-bone-content"></div>
-                </foreignObject>
-              </g>
-              <g id="ishikawa-label-manoObra" class="ish-label-group" onclick="window.__editCategory('manoObra')">
-                <foreignObject x="35" y="696" width="170" height="24">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-users"></i> Mano de obra</div>
-                </foreignObject>
-                <foreignObject x="35" y="720" width="170" height="160">
-                  <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-manoObra" class="ish-bone-content"></div>
-                </foreignObject>
-              </g>
-              <g id="ishikawa-label-medicion" class="ish-label-group" onclick="window.__editCategory('medicion')">
-                <foreignObject x="230" y="696" width="170" height="24">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-chart-line"></i> Medición</div>
-                </foreignObject>
-                <foreignObject x="230" y="720" width="170" height="160">
-                  <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-medicion" class="ish-bone-content"></div>
-                </foreignObject>
-              </g>
-              <g id="ishikawa-label-medioAmbiente" class="ish-label-group" onclick="window.__editCategory('medioAmbiente')">
-                <foreignObject x="425" y="696" width="170" height="24">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="fas fa-leaf"></i> Medio ambiente</div>
-                </foreignObject>
-                <foreignObject x="425" y="720" width="170" height="160">
-                  <div xmlns="http://www.w3.org/1999/xhtml" id="ishikawa-content-medioAmbiente" class="ish-bone-content"></div>
-                </foreignObject>
-              </g>
-              <g id="ishikawa-cause">
-                <rect x="767" y="410" width="220" height="100" rx="12" fill="white" stroke="#2563eb" stroke-width="1.5" filter="url(#ish-shadow)"/>
-                <foreignObject x="767" y="410" width="220" height="100">
-                  <div xmlns="http://www.w3.org/1999/xhtml" class="ish-problem-box">
-                    <div class="ish-problem-label">PROBLEMA</div>
-                    <div class="ish-problem-divider"></div>
-                    <div id="ishikawa-cause-text" class="ish-problem-text">No definido</div>
-                  </div>
-                </foreignObject>
-              </g>
-            </svg>
           </div>
         </div>
       </div>

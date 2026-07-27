@@ -13,10 +13,8 @@ import { getCurrentCauseSummary } from './state/store';
 import {
   renderWhysWizard, updateRootCauseSummary,
   whysNext, whysPrev, whysFinish, whysEdit, toggleWhysTimeline, clearWhys
-} from './components/whys-wizard';
-import {
-  refreshIshikawaDiagram, updateIshikawaDiagram, editCategory,
-  saveIshikawa, clearIshikawa
+} from './components/whys-wizard';import { refreshIshikawaDiagram, updateIshikawaDiagram, editCategory,
+  saveIshikawa, clearIshikawa, generateIshikawaPreview
 } from './components/ishikawa';
 import { addAccion, removeAccion, addAccionToDOM, clearActionPlan } from './components/plan';
 import { renderDatepicker, getDatepickerValue, setDatepickerValue } from './components/datepicker';
@@ -77,8 +75,9 @@ declare global {
     __loadAnalysis: () => Promise<void>;
     __deleteAnalysis: () => Promise<void>;
     __switchDataTab: (section: string) => void;
-
     __syncIndicador: () => void;
+    __closeIshikawaViewer: () => void;
+    __viewIshikawaModal: () => void;
   }
 }
 
@@ -151,19 +150,158 @@ function registerGlobalAPI(): void {
 
 
 /* ==========================================================================
+   Theme — Auto-detects device preference via prefers-color-scheme
+   ========================================================================== */
+
+const DARK_MQ = window.matchMedia('(prefers-color-scheme: dark)');
+
+function applyTheme(isDark: boolean): void {
+  const theme = isDark ? 'corporate-dark' : 'corporate';
+  document.documentElement.setAttribute('data-theme', theme);
+}
+
+function initTheme(): void {
+  // Apply theme based on system preference
+  applyTheme(DARK_MQ.matches);
+
+  // Listen for system preference changes
+  DARK_MQ.addEventListener('change', (e: MediaQueryListEvent) => {
+    applyTheme(e.matches);
+  });
+}
+
+/* ==========================================================================
    Ishikawa Generate
    ========================================================================== */
+
+let _cachedSVGContent: string | null = null;
+let _cachedViewBox: string | null = null;
+let _cachedMaquina = '';
+let _cachedFecha = '';
+
+/** Re-opens the cached modal (called by "Ver diagrama" button) */
+window.__viewIshikawaModal = function(): void {
+  if (!_cachedSVGContent) {
+    showToast('Primero genera el diagrama.', 'warning');
+    return;
+  }
+  openIshikawaModal(_cachedSVGContent, _cachedViewBox!, _cachedMaquina, _cachedFecha);
+};
+
+/** Builds and opens the full-screen modal */
+function openIshikawaModal(svgContent: string, viewBox: string, maquina: string, fecha: string): void {
+  const oldModal = document.getElementById('ishikawa-viewer-modal');
+  if (oldModal) oldModal.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'ishikawa-viewer-modal';
+  modal.className = 'ish-viewer-overlay';
+  modal.innerHTML = `<div class="ish-viewer-container">
+    <div class="ish-viewer-header">
+      <div class="ish-viewer-title">
+        <i class="fas fa-project-diagram text-indigo-500"></i>
+        <span>Diagrama de Ishikawa</span>
+        <span class="ish-viewer-meta">${escapeHtml(maquina)} • ${escapeHtml(fecha)}</span>
+      </div>
+      <button class="ish-viewer-close" onclick="window.__closeIshikawaViewer()" aria-label="Cerrar">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="ish-viewer-body">
+      <div class="ish-viewer-svg-wrap">
+        <svg viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg" class="ish-viewer-svg">
+          ${svgContent}
+        </svg>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.appendChild(modal);
+
+  requestAnimationFrame(() => {
+    modal.classList.add('open');
+  });
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      window.__closeIshikawaViewer();
+    }
+  });
+
+  const escHandler = function(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      window.__closeIshikawaViewer();
+      document.removeEventListener('keydown', escHandler);
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+}
 
 function generateIshikawa(): void {
   saveIshikawaData();
 
   setTimeout(() => {
-    const diagram = document.getElementById('ishikawa-diagram');
-    if (diagram && !diagram.classList.contains('hidden')) {
-      diagram.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const ishikawa: Record<string, string> = {};
+    CATEGORY_ORDER.forEach(cat => {
+      const el = document.getElementById(`ishikawa-${cat}`) as HTMLTextAreaElement | null;
+      ishikawa[cat] = el?.value?.trim() || '';
+    });
+    const problema = (document.getElementById('descripcionProblema') as HTMLTextAreaElement)?.value?.trim() || '';
+
+    const hasData = Object.values(ishikawa).some(v => v);
+    if (!hasData) {
+      showToast('Completa al menos una categoría para generar el diagrama.', 'warning');
+      return;
     }
+
+    const preview = generateIshikawaPreview(ishikawa, problema);
+    if (preview.isEmpty) {
+      showToast('No se pudo generar el diagrama.', 'warning');
+      return;
+    }
+
+    // Cache for reopen
+    _cachedSVGContent = preview.svgContent;
+    _cachedViewBox = preview.viewBox;
+    _cachedMaquina = (document.getElementById('maquina') as HTMLSelectElement)?.value?.trim() || 'Análisis actual';
+
+    const fechaContainer = document.getElementById('fechaEvento-container');
+    let fechaStr = '';
+    if (fechaContainer) {
+      const hidden = fechaContainer.querySelector('input[type="hidden"]') as HTMLInputElement | null;
+      if (hidden?.value) {
+        try {
+          const dates = JSON.parse(hidden.value);
+          if (Array.isArray(dates)) fechaStr = dates.join(', ');
+        } catch { fechaStr = hidden.value; }
+      }
+    }
+    _cachedFecha = fechaStr || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Open the modal
+    openIshikawaModal(_cachedSVGContent, _cachedViewBox!, _cachedMaquina, _cachedFecha);
+
+    // Change button to "Ver diagrama" for subsequent clicks
+    const btn = document.getElementById('btn-generar-ishikawa');
+    if (btn) {
+      const icon = btn.querySelector('i');
+      if (icon) icon.className = 'fas fa-eye';
+      const textSpan = document.getElementById('btn-ishikawa-text');
+      if (textSpan) textSpan.textContent = 'Ver diagrama';
+      btn.onclick = function() { window.__viewIshikawaModal(); };
+    }
+    const infoText = document.getElementById('ish-generate-info-text');
+    if (infoText) infoText.textContent = 'Diagrama generado — haz clic en "Ver diagrama" para abrirlo';
   }, 100);
 }
+
+window.__closeIshikawaViewer = function(): void {
+  const modal = document.getElementById('ishikawa-viewer-modal');
+  if (modal) {
+    modal.classList.remove('open');
+    setTimeout(() => modal.remove(), 300);
+  }
+};
 
 /* ==========================================================================
    Save Analysis (from Plan step)
@@ -447,6 +585,7 @@ window.addEventListener('error', (event: ErrorEvent) => {
 
 window.addEventListener('DOMContentLoaded', function() {
   registerGlobalAPI();
+  initTheme();
   initLogViewer();
   logInfo('app', 'Inicializada');
   initializeDatePicker();

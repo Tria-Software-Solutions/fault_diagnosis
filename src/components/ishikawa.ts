@@ -33,12 +33,6 @@ const PAIR_CENTERS = [130, 400, 630];
 const PROBLEM_X = 795;
 const SVG_W = 1040;
 
-// Category → pair index mapping
-const CATEGORY_PAIR: Record<string, number> = {
-  maquina: 0, metodo: 1, materiales: 2,
-  manoObra: 0, medicion: 1, medioAmbiente: 2
-};
-
 // Upper categories (3) and lower categories (3)
 const UPPER_CATS = ['maquina', 'metodo', 'materiales'];
 const LOWER_CATS = ['manoObra', 'medicion', 'medioAmbiente'];
@@ -153,6 +147,16 @@ function escapeHtml(s: string): string {
 
 // ── Main dynamic SVG generation ──────────────────────────
 
+// Category background colors (matching canvas version)
+const CAT_COLORS: Record<string, string> = {
+  maquina: '#dbeafe', metodo: '#dcfce7', materiales: '#fef3c7',
+  manoObra: '#fce7f3', medicion: '#ede9fe', medioAmbiente: '#ccfbf1'
+};
+const CAT_STROKE: Record<string, string> = {
+  maquina: '#93c5fd', metodo: '#86efac', materiales: '#fde68a',
+  manoObra: '#f9a8d4', medicion: '#c4b5fd', medioAmbiente: '#5eead4'
+};
+
 function generateDynamicSVG(src?: { ishikawa: Record<string, string | undefined>; problema: string }): { content: string; height: number; minY: number } {
   const problema = src?.problema ?? ((document.getElementById('descripcionProblema') as HTMLTextAreaElement)?.value?.trim() || '');
 
@@ -168,105 +172,94 @@ function generateDynamicSVG(src?: { ishikawa: Record<string, string | undefined>
       value = (document.getElementById(`ishikawa-${key}`) as HTMLTextAreaElement)?.value?.trim() || '';
     }
     texts[key] = value;
-    // Max box width: must leave ≥20px gap between adjacent pair centers (min gap = 230px)
-    const maxW = 210;
+    const maxW = 240;
     dims[key] = calcBoxDimensions(value, maxW);
   });
 
   // ── 2. Symmetric layout — dynamic bone length based on tallest box ──
   const maxUpperTotal = Math.max(...UPPER_CATS.map(c =>
-    dims[c].height + LABEL_H + LABEL_GAP + 10
+    dims[c].height + LABEL_H + LABEL_GAP + 14
   ));
   const maxLowerTotal = Math.max(...LOWER_CATS.map(c =>
-    dims[c].height + LABEL_H + LABEL_GAP + 10
+    dims[c].height + LABEL_H + LABEL_GAP + 14
   ));
-  const BONE_LENGTH = Math.max(180, maxUpperTotal, maxLowerTotal);
+  const BONE_LENGTH = Math.max(200, maxUpperTotal, maxLowerTotal);
 
-  // Fixed bone connection points (same for ALL upper/lower bones)
   const upperBoneY1 = SPINE_Y - BONE_LENGTH;
   const lowerBoneY1 = SPINE_Y + BONE_LENGTH;
 
-  // Lower boxes: below the lower bone end
-  const lowerLabelY = lowerBoneY1 + 10;  // = 650
-  const lowerContentY = lowerLabelY + LABEL_H + LABEL_GAP; // = 676
+  const lowerLabelY = lowerBoneY1 + 12;
+  const lowerContentY = lowerLabelY + LABEL_H + LABEL_GAP;
 
-  // Max lower box height for bounds calculation
   const maxLowerBoxH = Math.max(...LOWER_CATS.map(c => dims[c].height));
 
-  // Problem box dimensions — dynamically sized, no cap
-  const problemBoxH = Math.max(80, calcBoxDimensions(problema || 'No definido', 240).height);
+  // Problem box
+  const problemBoxH = Math.max(90, calcBoxDimensions(problema || 'No definido', 280).height);
   const problemY = SPINE_Y - problemBoxH / 2;
 
-  // ── 2b. Calculate tight content bounds for viewBox ──
-  const upperContentBottom = upperBoneY1 - 10; // 10px gap between content box bottom and bone start
-  let contentMinY = SPINE_Y - 50; // fish tail top
-  let contentMaxY = SPINE_Y + 50; // fish tail bottom
+  // ── 2b. Content bounds for viewBox ──
+  const upperContentBottom = upperBoneY1 - 14;
+  let contentMinY = SPINE_Y - 60;
+  let contentMaxY = SPINE_Y + 60;
 
-  // Upper boxes may extend above the fish tail
   for (const cat of UPPER_CATS) {
     const bh = dims[cat].height;
     const uContentY = upperContentBottom - bh;
     const uLabelY = uContentY - LABEL_H - LABEL_GAP;
-    const topY = Math.max(uLabelY, 8);
-    if (topY < contentMinY) contentMinY = topY;
+    if (uLabelY < contentMinY) contentMinY = uLabelY;
   }
 
-  // Lower boxes bottom
   const lowerBoxBottom = lowerContentY + maxLowerBoxH;
   if (lowerBoxBottom > contentMaxY) contentMaxY = lowerBoxBottom;
-
-  // Problem box top and bottom
   if (problemY < contentMinY) contentMinY = problemY;
-  const problemBoxBottom = problemY + problemBoxH;
-  if (problemBoxBottom > contentMaxY) contentMaxY = problemBoxBottom;
-
-  // Contact marks
-  if (SPINE_Y + 8 > contentMaxY) contentMaxY = SPINE_Y + 8;
+  if (problemY + problemBoxH > contentMaxY) contentMaxY = problemY + problemBoxH;
 
   const padding = 30;
   const svgMinY = contentMinY - padding;
-  const svgH = Math.max(400, contentMaxY - svgMinY + padding);
+  const svgH = Math.max(420, contentMaxY - svgMinY + padding);
 
-  // ── 3. Build SVG elements ──
+  // ── 3. Build SVG ──
   const parts: string[] = [];
 
   // ── Defs ──
   parts.push(`<defs>
-    <filter id="ish-shadow" x="-4" y="-4" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.08)"/>
+    <filter id="ish-shadow" x="-6" y="-6" width="150%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="rgba(0,0,0,0.10)"/>
     </filter>
-    <filter id="ish-shadow-box" x="-4" y="-4" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(37,99,235,0.12)"/>
+    <filter id="ish-problem-shadow" x="-6" y="-6" width="150%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(30,58,95,0.25)"/>
     </filter>
     <linearGradient id="ish-problem-grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#1e3a5f"/>
       <stop offset="100%" stop-color="#2563eb"/>
     </linearGradient>
-    <marker id="ish-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#1e3a5f"/>
+    <marker id="ish-arrow" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#2563eb"/>
     </marker>
   </defs>`);
 
-  // ── Background card (aligned with viewBox) ──
+  // ── Background card ──
   parts.push(rect({ x: String(SVG_W * 0.01), y: String(svgMinY), width: String(SVG_W * 0.98), height: String(svgH), rx: '16', fill: 'white', opacity: '0.5' }));
 
-  // ── Fish tail ──
-  const tailTip = SPINE_START_X - 45;
+  // ── Fish tail (navy, slightly larger) ──
+  const tailTip = SPINE_START_X - 55;
   parts.push(path(
-    `M ${SPINE_START_X} ${SPINE_Y} L ${tailTip} ${SPINE_Y - 50} L ${tailTip} ${SPINE_Y + 50} Z`,
+    `M ${SPINE_START_X} ${SPINE_Y} L ${tailTip} ${SPINE_Y - 55} L ${tailTip} ${SPINE_Y + 55} Z`,
     { fill: '#1e3a5f', opacity: '0.85' }
   ));
-  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y), x2: String(tailTip), y2: String(SPINE_Y + 50), stroke: '#1e3a5f', 'stroke-width': '3', 'stroke-linecap': 'round' }));
-  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y), x2: String(tailTip), y2: String(SPINE_Y - 50), stroke: '#1e3a5f', 'stroke-width': '3', 'stroke-linecap': 'round' }));
+  // Tail edge lines
+  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y), x2: String(tailTip), y2: String(SPINE_Y + 55), stroke: '#1e3a5f', 'stroke-width': '4', 'stroke-linecap': 'round' }));
+  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y), x2: String(tailTip), y2: String(SPINE_Y - 55), stroke: '#1e3a5f', 'stroke-width': '4', 'stroke-linecap': 'round' }));
 
-  // ── Spine ──
-  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y), x2: String(SPINE_END_X), y2: String(SPINE_Y), stroke: '#1e3a5f', 'stroke-width': '5', 'stroke-linecap': 'round', 'marker-end': 'url(#ish-arrow)' }));
-  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y - 1), x2: String(SPINE_END_X), y2: String(SPINE_Y - 1), stroke: '#2563eb', 'stroke-width': '1.5', 'stroke-linecap': 'round', opacity: '0.3' }));
+  // ── Spine (navy thick) ──
+  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y), x2: String(SPINE_END_X), y2: String(SPINE_Y), stroke: '#1e3a5f', 'stroke-width': '6', 'stroke-linecap': 'round', 'marker-end': 'url(#ish-arrow)' }));
+  // Blue accent line above spine
+  parts.push(line({ x1: String(SPINE_START_X), y1: String(SPINE_Y - 1), x2: String(SPINE_END_X), y2: String(SPINE_Y - 1), stroke: '#3b82f6', 'stroke-width': '2', 'stroke-linecap': 'round', opacity: '0.4' }));
 
   // ── Spine contact marks ──
   for (const cx of PAIR_CENTERS) {
     const scx = cx + BONE_OFFSET;
-    parts.push(line({ x1: String(scx), y1: String(SPINE_Y - 8), x2: String(scx), y2: String(SPINE_Y + 8), stroke: '#1e3a5f', 'stroke-width': '2' }));
+    parts.push(line({ x1: String(scx), y1: String(SPINE_Y - 10), x2: String(scx), y2: String(SPINE_Y + 10), stroke: '#1e3a5f', 'stroke-width': '2.5' }));
   }
 
   // ── Upper branches ──
@@ -277,29 +270,50 @@ function generateDynamicSVG(src?: { ishikawa: Record<string, string | undefined>
     const bh = dims[cat].height;
     const bx = cx - bw / 2;
 
-    // Box sits just above the bone end — position depends on box height
     const uContentY = upperContentBottom - bh;
     const uLabelY = uContentY - LABEL_H - LABEL_GAP;
+    const uLabelTop = Math.max(uLabelY, 8);
+    const uContentTop = Math.max(uContentY, 8 + LABEL_H + LABEL_GAP);
 
+    // Rounded box background with shadow
+    const boxBottom = uContentTop + bh;
+    const boxTop = uLabelTop;
+    const boxH = boxBottom - boxTop;
+    parts.push(rect({
+      x: String(bx), y: String(boxTop),
+      width: String(bw), height: String(boxH),
+      rx: '8', fill: CAT_COLORS[cat] || '#f1f5f9',
+      filter: 'url(#ish-shadow)'
+    }));
+    // Separator line
+    const sepY = uLabelTop + LABEL_H + 4;
+    parts.push(line({
+      x1: String(bx + 10), y1: String(sepY),
+      x2: String(bx + bw - 10), y2: String(sepY),
+      stroke: CAT_STROKE[cat] || '#e2e8f0', 'stroke-width': '1'
+    }));
+
+    // Label
     const labelHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="${ISHIKAWA_CATEGORY_CONFIG[cat].icon}"></i> ${ISHIKAWA_CATEGORY_CONFIG[cat].label}</div>`;
-    parts.push(fo({ x: String(bx), y: String(Math.max(uLabelY, 8)), width: String(bw), height: String(LABEL_H), onclick: `window.__editCategory('${cat}')` }, labelHtml));
+    parts.push(fo({ x: String(bx + 4), y: String(uLabelTop), width: String(bw - 8), height: String(LABEL_H), onclick: `window.__editCategory('${cat}')` }, labelHtml));
 
+    // Content
     const items = (texts[cat] || '').split(',').map(s => s.trim()).filter(Boolean);
     const contentLines: string[] = [];
     for (const item of items) {
-      const wrapped = wrapText(item, bw);
+      const wrapped = wrapText(item, bw - 12);
       contentLines.push(...wrapped);
     }
-    const contentHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-content" style="overflow-y:auto">${contentLines.map(l => escapeHtml(l)).join('<br>')}</div>`;
-    parts.push(fo({ x: String(bx), y: String(Math.max(uContentY, 8 + LABEL_H + LABEL_GAP)), width: String(bw), height: String(bh), onclick: `window.__editCategory('${cat}')` }, contentHtml));
+    const contentHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-content">${contentLines.map(l => escapeHtml(l)).join('<br>')}</div>`;
+    parts.push(fo({ x: String(bx + 6), y: String(uContentTop), width: String(bw - 12), height: String(bh), onclick: `window.__editCategory('${cat}')` }, contentHtml));
 
-    // Bone — from fixed upper end DOWN to spine (same angle for all)
+    // Blue branch
     const scx = cx + BONE_OFFSET;
     parts.push(line({
       id: `ishikawa-branch-${cat}`,
       x1: String(cx), y1: String(upperBoneY1),
       x2: String(scx), y2: String(SPINE_Y),
-      stroke: '#475569', 'stroke-width': '3', 'stroke-linecap': 'round'
+      stroke: '#3b82f6', 'stroke-width': '3', 'stroke-linecap': 'round'
     }));
   }
 
@@ -311,42 +325,62 @@ function generateDynamicSVG(src?: { ishikawa: Record<string, string | undefined>
     const bh = dims[cat].height;
     const bx = cx - bw / 2;
 
-    // Label + Content foreignObjects
+    const boxH = lowerContentY + bh - lowerLabelY;
+    parts.push(rect({
+      x: String(bx), y: String(lowerLabelY),
+      width: String(bw), height: String(boxH),
+      rx: '8', fill: CAT_COLORS[cat] || '#f1f5f9',
+      filter: 'url(#ish-shadow)'
+    }));
+    const sepY = lowerLabelY + LABEL_H + 4;
+    parts.push(line({
+      x1: String(bx + 10), y1: String(sepY),
+      x2: String(bx + bw - 10), y2: String(sepY),
+      stroke: CAT_STROKE[cat] || '#e2e8f0', 'stroke-width': '1'
+    }));
+
     const labelHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-label"><i class="${ISHIKAWA_CATEGORY_CONFIG[cat].icon}"></i> ${ISHIKAWA_CATEGORY_CONFIG[cat].label}</div>`;
-    parts.push(fo({ x: String(bx), y: String(lowerLabelY), width: String(bw), height: String(LABEL_H), onclick: `window.__editCategory('${cat}')` }, labelHtml));
+    parts.push(fo({ x: String(bx + 4), y: String(lowerLabelY), width: String(bw - 8), height: String(LABEL_H), onclick: `window.__editCategory('${cat}')` }, labelHtml));
 
     const items = (texts[cat] || '').split(',').map(s => s.trim()).filter(Boolean);
     const contentLines: string[] = [];
     for (const item of items) {
-      const wrapped = wrapText(item, bw);
+      const wrapped = wrapText(item, bw - 12);
       contentLines.push(...wrapped);
     }
-    const contentHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-content" style="overflow-y:auto">${contentLines.map(l => escapeHtml(l)).join('<br>')}</div>`;
-    parts.push(fo({ x: String(bx), y: String(lowerContentY), width: String(bw), height: String(bh), onclick: `window.__editCategory('${cat}')` }, contentHtml));
+    const contentHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-bone-content">${contentLines.map(l => escapeHtml(l)).join('<br>')}</div>`;
+    parts.push(fo({ x: String(bx + 6), y: String(lowerContentY), width: String(bw - 12), height: String(bh), onclick: `window.__editCategory('${cat}')` }, contentHtml));
 
-    // Bone — from spine DOWN to fixed lower end (same angle for all)
     const scx = cx + BONE_OFFSET;
     parts.push(line({
       id: `ishikawa-branch-${cat}`,
       x1: String(scx), y1: String(SPINE_Y),
       x2: String(cx), y2: String(lowerBoneY1),
-      stroke: '#475569', 'stroke-width': '3', 'stroke-linecap': 'round'
+      stroke: '#3b82f6', 'stroke-width': '3', 'stroke-linecap': 'round'
     }));
   }
 
-  // ── Problem box (uses problemBoxH & problemY from above) ──
+  // ── Problem box (navy gradient with shadow) ──
   const problemText = problema || 'No definido';
+  // Shadow rect
   parts.push(rect({
     x: String(PROBLEM_X), y: String(problemY),
-    width: '220', height: String(problemBoxH),
-    rx: '12', fill: 'white', stroke: '#2563eb', 'stroke-width': '1.5', filter: 'url(#ish-shadow)'
+    width: '240', height: String(problemBoxH),
+    rx: '14', fill: 'url(#ish-problem-grad)',
+    filter: 'url(#ish-problem-shadow)'
+  }));
+  // Inner glow
+  parts.push(rect({
+    x: String(PROBLEM_X), y: String(problemY),
+    width: '240', height: String(problemBoxH),
+    rx: '14', fill: 'url(#ish-problem-grad)'
   }));
   const problemHtml = `<div xmlns="http://www.w3.org/1999/xhtml" class="ish-problem-box" style="height:${problemBoxH}px">
-    <div class="ish-problem-label">PROBLEMA</div>
-    <div class="ish-problem-divider"></div>
-    <div class="ish-problem-text">${escapeHtml(problemText)}</div>
+    <div class="ish-problem-label" style="color:rgba(255,255,255,0.9);font-size:12px;letter-spacing:1.5px">PROBLEMA</div>
+    <div class="ish-problem-divider" style="background:rgba(255,255,255,0.15)"></div>
+    <div class="ish-problem-text" style="color:#93c5fd;font-size:14px;text-align:left;padding:0 8px">${escapeHtml(problemText)}</div>
   </div>`;
-  parts.push(fo({ x: String(PROBLEM_X), y: String(problemY), width: '220', height: String(problemBoxH) }, problemHtml));
+  parts.push(fo({ x: String(PROBLEM_X), y: String(problemY), width: '240', height: String(problemBoxH) }, problemHtml));
 
   return { content: parts.join('\n'), height: svgH, minY: svgMinY };
 }

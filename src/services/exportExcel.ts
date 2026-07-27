@@ -179,6 +179,7 @@ export async function exportSingleRowExcel(
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('Reporte exportado a Excel.', 'success');
 }
 
 /** Exports ALL saved analyses from the file as a single multi-sheet Excel workbook */
@@ -220,7 +221,12 @@ export async function exportAllExcel(analyses: Array<{ id: string; savedAt: stri
     }
 
     // ---- TITLE ----
-    const titleRow = sheet.addRow([`Análisis #${idx + 1}`, `Guardado: ${analysis.savedAt ? formatDateDDMMYYYY(analysis.savedAt.split('T')[0]) : '—'}`]);
+    const maquinaTitle = data.captura?.maquina || '';
+    const fechasTitle = (data.captura?.fecha || []).map(d => formatDateDDMMYYYY(d)).join(', ');
+    const titleParts = [`Análisis #${idx + 1}`];
+    if (maquinaTitle) titleParts.push(maquinaTitle);
+    if (fechasTitle) titleParts.push(fechasTitle);
+    const titleRow = sheet.addRow([titleParts.join(' — '), `Guardado: ${analysis.savedAt ? formatDateDDMMYYYY(analysis.savedAt.split('T')[0]) : '—'}`, '', '', '']);
     titleRow.eachCell(c => {
       c.font = { bold: true, size: 12, name: 'Calibri', color: { argb: colors.white } };
       c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colors.navy } };
@@ -323,7 +329,25 @@ export async function exportAllExcel(analyses: Array<{ id: string; savedAt: stri
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'Diagnostico_General.xlsx';
+  const fileName = buildIndividualFilename(undefined, undefined, 'xlsx').replace('Diagnostico.', 'Diagnostico_General.');
+  // Actually build a proper name
+  const genName = (() => {
+    const allDates: string[] = [];
+    analyses.forEach(a => {
+      const f = a.data.captura?.fecha;
+      if (f) f.forEach(d => { if (d) allDates.push(d); });
+    });
+    const parts = ['Diagnostico_General', String(analyses.length) + '_analisis'];
+    if (allDates.length > 0) {
+      const sorted = [...new Set(allDates)].sort();
+      const first = formatDateDDMMYYYY(sorted[0]);
+      const last = sorted.length > 1 ? formatDateDDMMYYYY(sorted[sorted.length - 1]) : '';
+      if (last && last !== first) parts.push(first + '_a_' + last);
+      else parts.push(first);
+    }
+    return parts.join('_').replace(/[^a-zA-Z0-9_\-]/g, '') + '.xlsx';
+  })();
+  a.download = genName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* daisyUI theme — professional, modern, brand-aligned */
+/* daisyUI themes — Light & Dark, professional and modern */
 @plugin "daisyui/theme" {
   name: "corporate";
   default: true;
@@ -37,6 +37,41 @@
   --noise: 0;
 }
 
+@plugin "daisyui/theme" {
+  name: "corporate-dark";
+  default: false;
+  prefersdark: false;
+  color-scheme: dark;
+  --color-primary: #3b82f6;
+  --color-primary-content: #ffffff;
+  --color-secondary: #1e3a5f;
+  --color-secondary-content: #ffffff;
+  --color-accent: #34d399;
+  --color-accent-content: #0f172a;
+  --color-neutral: #94a3b8;
+  --color-neutral-content: #0f172a;
+  --color-base-100: #0f172a;
+  --color-base-200: #1e293b;
+  --color-base-300: #334155;
+  --color-base-content: #f1f5f9;
+  --color-info: #60a5fa;
+  --color-info-content: #0f172a;
+  --color-success: #34d399;
+  --color-success-content: #0f172a;
+  --color-warning: #fbbf24;
+  --color-warning-content: #0f172a;
+  --color-error: #f87171;
+  --color-error-content: #0f172a;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.625rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
 /* ==========================================================================
    Variables CSS
    ========================================================================== */
@@ -46,18 +81,12 @@
   --sky: #e0f2fe;
 }
 
-/* Force light color-scheme on all form elements — prevent dark inputs in dark mode */
+/* Theme-aware color-scheme — html[data-theme] switches via daisyUI */
 html {
-  color-scheme: light !important;
+  scroll-behavior: smooth;
 }
 
-input, select, textarea,
-.input, .select, .textarea,
-.input-bordered, .select-bordered, .textarea-bordered {
-  color-scheme: light !important;
-  background-color: #fff !important;
-  color: #0f172a !important;
-}
+/* Inputs inherit their theme colors from daisyUI — no forced light mode */
 
 /* ==========================================================================
    Layout General
@@ -357,15 +386,14 @@ header::before {
 .ish-bone-content {
   font-family: Inter, system-ui, sans-serif;
   font-size: 12px;
-  color: #334155;
+  color: #1e40af;
   line-height: 1.5;
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: pre-wrap;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.7);
+  background: transparent;
   border-radius: 6px;
-  border: 1px solid rgba(226, 232, 240, 0.6);
   max-height: none;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -383,30 +411,30 @@ header::before {
 }
 
 .ish-problem-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  color: #1e3a5f;
-  letter-spacing: 1.2px;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 1.5px;
   margin-bottom: 6px;
 }
 
 .ish-problem-divider {
   width: 60%;
   height: 1.5px;
-  background: #dbeafe;
+  background: rgba(255,255,255,0.15);
   margin-bottom: 8px;
   border-radius: 2px;
 }
 
 .ish-problem-text {
-  font-size: 13px;
-  color: #1e293b;
-  text-align: center;
+  font-size: 14px;
+  color: #93c5fd;
+  text-align: left;
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: normal;
   line-height: 1.5;
-  max-width: 190px;
+  max-width: 200px;
   width: 100%;
   font-weight: 500;
 }
@@ -1370,18 +1398,19 @@ body:not(.loading) .main-content {
 
 
 /* ==========================================================================
-   Stepper — daisyUI steps wrapper — Premium
+   Stepper — daisyUI steps wrapper — Premium (theme-aware)
    ========================================================================== */
 .stepper-wrap {
   position: sticky;
   top: 72px;
   z-index: 40;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-base-100, #ffffff);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   padding: 4px 0 2px;
+  border-bottom: 1px solid var(--color-base-300, #f1f5f9);
 }
 
 /* Bottom accent line */
@@ -1392,7 +1421,7 @@ body:not(.loading) .main-content {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 0%, #cbd5e1 30%, #94a3b8 50%, #cbd5e1 70%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--color-base-300) 30%, var(--color-neutral, #94a3b8) 50%, var(--color-base-300) 70%, transparent 100%);
 }
 
 /* Locked step */
@@ -1401,8 +1430,6 @@ body:not(.loading) .main-content {
   opacity: 0.35;
   pointer-events: none;
 }
-
-
 
 /* Improve daisyUI step circle sizing and transitions */
 .steps .step {
@@ -1424,12 +1451,10 @@ body:not(.loading) .main-content {
   font-size: 13px;
 }
 
-/* Active step — blue circle (daisyUI default) */
-/* Completed step — green circle with check (daisyUI default) */
-
 .steps .step:not(.tab-locked):hover {
   cursor: pointer;
 }
+
 
 /* Mobile: compact step circles + smaller text */
 @media (max-width: 640px) {
@@ -2253,3 +2278,670 @@ body:not(.loading) .main-content {
     padding-right: 2rem;
   }
 }
+
+/* ==========================================================================
+   Ishikawa Diagram Full-Screen Modal Viewer
+   ========================================================================== */
+.ish-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  padding: 24px;
+}
+
+.ish-viewer-overlay.open {
+  opacity: 1;
+}
+
+.ish-viewer-container {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 1100px;
+  height: auto;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  transform: scale(0.95) translateY(10px);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+  opacity: 0;
+}
+
+.ish-viewer-overlay.open .ish-viewer-container {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.ish-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  background: #f8fafc;
+  border-radius: 16px 16px 0 0;
+}
+
+.ish-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ish-viewer-title i {
+  font-size: 18px;
+}
+
+.ish-viewer-meta {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.ish-viewer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+}
+
+.ish-viewer-close:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.ish-viewer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  background: linear-gradient(135deg, #f0f4f8 0%, #dce3ed 100%);
+  border-radius: 0 0 16px 16px;
+}
+
+.ish-viewer-svg-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ish-viewer-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Dark mode overrides for the modal */
+[data-theme="corporate-dark"] .ish-viewer-container {
+  background: #1e293b;
+}
+
+[data-theme="corporate-dark"] .ish-viewer-header {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .ish-viewer-title {
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .ish-viewer-meta {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .ish-viewer-close {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .ish-viewer-close:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .ish-viewer-body {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+@media (max-width: 768px) {
+  .ish-viewer-overlay {
+    padding: 8px;
+  }
+  .ish-viewer-container {
+    max-height: 95vh;
+    border-radius: 12px;
+  }
+  .ish-viewer-header {
+    padding: 12px 14px;
+  }
+  .ish-viewer-title {
+    font-size: 14px;
+    gap: 6px;
+  }
+  .ish-viewer-meta {
+    font-size: 11px;
+  }
+  .ish-viewer-body {
+    padding: 10px;
+  }
+  .ish-viewer-svg {
+    min-width: 500px;
+  }
+}
+
+/* ==========================================================================
+   Dark Mode Overrides — [data-theme="corporate-dark"]
+   Elements with hardcoded colors that need dark variants
+   ========================================================================== */
+[data-theme="corporate-dark"] .stepper-wrap {
+  border-bottom-color: #334155;
+}
+
+[data-theme="corporate-dark"] .stepper-wrap::after {
+  background: linear-gradient(90deg, transparent 0%, #334155 30%, #475569 50%, #334155 70%, transparent 100%);
+}
+
+[data-theme="corporate-dark"] .step-nav {
+  background: rgba(15, 23, 42, 0.92);
+}
+
+[data-theme="corporate-dark"] .step-nav-clear-btn {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .step-nav-clear-btn:hover {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .step-nav-clear-btn--danger:hover {
+  background: #3b1a1a;
+  color: #f87171;
+}
+
+[data-theme="corporate-dark"] .card-standard {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .card-standard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="corporate-dark"] .why-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .card-section-title {
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .std-label {
+  color: #cbd5e1;
+}
+
+[data-theme="corporate-dark"] .indicador-pill {
+  border-color: #334155;
+  color: #94a3b8;
+  background: #1e293b;
+}
+
+[data-theme="corporate-dark"] .indicador-pill:hover {
+  border-color: #3b82f6;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .indicador-pill:has(input:checked) {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #1e3a5f, #1e293b);
+  color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="corporate-dark"] .indicador-pill:has(input:checked):hover {
+  background: linear-gradient(135deg, #1e3a5f, #0f172a);
+}
+
+[data-theme="corporate-dark"] .ish-generate-area {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .ish-generate-area.ready {
+  border-color: #2563eb;
+  background: #1e293b;
+}
+
+[data-theme="corporate-dark"] .ish-generate-info {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .ish-generate-info i {
+  color: #475569;
+}
+
+[data-theme="corporate-dark"] .ish-generate-area.ready .ish-generate-info span {
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .analysis-filters-bar {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .filter-label {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .analysis-list {
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .analysis-list-empty {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .analysis-list-item:hover {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .analysis-list-item.selected {
+  background: #1e3a5f;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+[data-theme="corporate-dark"] .analysis-list-num {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+[data-theme="corporate-dark"] .analysis-list-machine {
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .analysis-list-problem {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .analysis-list-date {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .analysis-list-arrow {
+  color: #475569;
+}
+
+[data-theme="corporate-dark"] .analysis-list-item:hover .analysis-list-arrow {
+  color: #60a5fa;
+}
+
+[data-theme="corporate-dark"] .selected-analysis-bar {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .selected-machine {
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .selected-problem {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .selected-indicator {
+  color: #60a5fa;
+  background: #1e3a5f;
+}
+
+[data-theme="corporate-dark"] .selected-date {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .selected-sep {
+  color: #475569;
+}
+
+[data-theme="corporate-dark"] .selected-actions-divider {
+  background: #334155;
+}
+
+[data-theme="corporate-dark"] .resumen-box {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .resumen-box h3 {
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .resumen-box .resumen-item {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .resumen-box .resumen-item strong {
+  color: #cbd5e1;
+}
+
+[data-theme="corporate-dark"] .section-header-row td {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+  color: #cbd5e1;
+  border-bottom-color: #334155;
+}
+
+[data-theme="corporate-dark"] .plan-section-header h3 {
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .accion-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .accion-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="corporate-dark"] .analysis-info-bar {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .analysis-info-sep {
+  color: #475569;
+}
+
+[data-theme="corporate-dark"] .step-header .step-subtitle {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .step-header::after {
+  background: linear-gradient(90deg, #334155 0%, #1e293b 60%, transparent 100%);
+}
+
+[data-theme="corporate-dark"] .step-header .step-title {
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .step-header-icon {
+  color: #60a5fa;
+}
+
+[data-theme="corporate-dark"] .step-nav-divider {
+  background: #334155;
+}
+
+[data-theme="corporate-dark"] .data-table-ishikawa-preview {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .ishikawa-preview-header {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .ishikawa-preview-empty {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .ishikawa-preview-empty i {
+  color: #475569;
+}
+
+[data-theme="corporate-dark"] .plan-empty {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .plan-action-meta {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .plan-action-meta i {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .plan-summary {
+  color: #cbd5e1;
+}
+
+[data-theme="corporate-dark"] .cell-field {
+  color: #cbd5e1;
+}
+
+[data-theme="corporate-dark"] .cell-value {
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .cell-value .val-empty {
+  color: #475569;
+}
+
+[data-theme="corporate-dark"] .cell-btn {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .cell-btn:hover {
+  color: #94a3b8;
+  background: #1e293b;
+}
+
+[data-theme="corporate-dark"] .cell-btn-inline {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .cell-btn-inline:hover {
+  color: #94a3b8;
+  background: #1e293b;
+}
+
+[data-theme="corporate-dark"] .cell-btn-delete-row:hover {
+  color: #f87171 !important;
+  background: #3b1a1a !important;
+}
+
+[data-theme="corporate-dark"] .inline-save { color: #34d399; }
+[data-theme="corporate-dark"] .inline-save:hover { background: #1e293b; }
+[data-theme="corporate-dark"] .inline-cancel { color: #94a3b8; }
+[data-theme="corporate-dark"] .inline-cancel:hover { background: #1e293b; }
+
+[data-theme="corporate-dark"] .inline-input {
+  border-color: #3b82f6;
+  color: #f1f5f9;
+  background: #1e293b;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+[data-theme="corporate-dark"] .dp-mode-btn {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .dp-mode-btn:hover {
+  color: #cbd5e1;
+}
+
+[data-theme="corporate-dark"] .dp-mode-btn.dp-active {
+  background: #1e293b;
+  color: #60a5fa;
+}
+
+[data-theme="corporate-dark"] .dp-mode-toggle {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .dp-chip {
+  background: #1e3a5f;
+  border-color: #2563eb;
+  color: #60a5fa;
+}
+
+[data-theme="corporate-dark"] .dp-chip:hover {
+  background: #1e293b;
+  border-color: #3b82f6;
+}
+
+[data-theme="corporate-dark"] .dp-chip-remove {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .dp-chip-remove:hover {
+  background: #3b1a1a;
+  color: #f87171;
+}
+
+[data-theme="corporate-dark"] .dp-range-sep {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .dp-chips-empty {
+  color: #64748b;
+}
+
+[data-theme="corporate-dark"] .review-drawer {
+  background: #0f172a;
+}
+
+[data-theme="corporate-dark"] .drawer-header {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .ishikawa-svg-wrap {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: #334155;
+}
+
+[data-theme="corporate-dark"] .ish-label-group:hover {
+  opacity: 0.8;
+}
+
+[data-theme="corporate-dark"] .ish-bone-label {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .ish-bone-content {
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(51, 65, 85, 0.6);
+}
+
+[data-theme="corporate-dark"] .ish-problem-label {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .ish-problem-text {
+  color: #e2e8f0;
+}
+
+[data-theme="corporate-dark"] .ish-problem-divider {
+  background: #334155;
+}
+
+/* Ishikawa SVG dark mode - override inline presentational attributes */
+[data-theme="corporate-dark"] .ishikawa-svg rect,
+[data-theme="corporate-dark"] .ish-viewer-svg rect {
+  fill: #1e293b !important;
+}
+
+[data-theme="corporate-dark"] .ishikawa-svg path,
+[data-theme="corporate-dark"] .ish-viewer-svg path {
+  fill: #475569 !important;
+}
+
+[data-theme="corporate-dark"] .ishikawa-svg line,
+[data-theme="corporate-dark"] .ish-viewer-svg line {
+  stroke: #64748b !important;
+}
+
+[data-theme="corporate-dark"] .ishikawa-svg line[stroke*="2563eb"],
+[data-theme="corporate-dark"] .ish-viewer-svg line[stroke*="2563eb"] {
+  stroke: #3b82f6 !important;
+}
+
+[data-theme="corporate-dark"] .ishikawa-svg rect[stroke*="2563eb"],
+[data-theme="corporate-dark"] .ish-viewer-svg rect[stroke*="2563eb"] {
+  stroke: #3b82f6 !important;
+  fill: #1e293b !important;
+}
+
+[data-theme="corporate-dark"] .ishikawa-svg polygon,
+[data-theme="corporate-dark"] .ish-viewer-svg polygon {
+  fill: #3b82f6 !important;
+}
+
+[data-theme="corporate-dark"] .completion-banner h3 {
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .completion-banner p {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .completion-banner .banner-icon.success {
+  background: #064e3b;
+  color: #34d399;
+}
+
+[data-theme="corporate-dark"] .completion-banner .banner-icon.info {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+[data-theme="corporate-dark"] p.text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+[data-theme="corporate-dark"] span.text-gray-700 {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="corporate-dark"] .text-gray-400 {
+  color: #64748b !important;
+}
+
+/* Dark mode overrides for the main body background */
+[data-theme="corporate-dark"] body {
+  --tw-bg-opacity: 1;
+  background-color: #0f172a !important;
+}
+
+[data-theme="corporate-dark"] .step-card {
+  background: transparent;
+}
+
+
