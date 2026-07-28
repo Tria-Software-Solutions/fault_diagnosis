@@ -404,14 +404,14 @@ window.__deleteEntryById = async function(entryId: string): Promise<void> {
 window.__exportSinglePDF = async function(entryId: string): Promise<void> {
   const entry = savedAnalyses.find(e => e.id === entryId);
   if (!entry) return;
-  await exportAllPDF([entry]);
+  await exportAllPDF([entry], false);
 };
 
 /** Exports a single analysis entry as Excel */
 window.__exportSingleExcel = async function(entryId: string): Promise<void> {
   const entry = savedAnalyses.find(e => e.id === entryId);
   if (!entry) return;
-  await exportAllExcel([entry]);
+  await exportAllExcel([entry], false);
 };
 
 /** Opens a full-screen modal showing the Ishikawa diagram for a specific entry */
@@ -459,9 +459,7 @@ window.__viewIshikawaDiagram = function(entryId: string): void {
     </div>
     <div class="ish-viewer-body">
       <div class="ish-viewer-svg-wrap">
-        <svg viewBox="${preview.viewBox}" xmlns="http://www.w3.org/2000/svg" class="ish-viewer-svg">
-          ${preview.svgContent}
-        </svg>
+        <img src="${preview.imgData}" alt="Diagrama de Ishikawa" class="ish-viewer-svg" style="width:100%;height:auto;max-width:1600px">
       </div>
     </div>
   </div>`;

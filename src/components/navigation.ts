@@ -343,10 +343,8 @@ export function updateIshikawaGenerateBtn(): void {
   const area = document.getElementById('ishikawa-generate-area');
   if (btn) {
     btn.disabled = !allFilled;
-    // Reset to "Generar diagrama" mode if a category was edited after generation
-    if (allFilled && btn.getAttribute('data-generated') === 'true') {
-      // Only reset if the SVG was cached — meaning it was generated before
-    } else if (!allFilled) {
+    // If the diagram was previously generated and the user edits a field, reset to generate mode
+    if (btn.getAttribute('data-generated') === 'true') {
       btn.removeAttribute('data-generated');
       const icon = btn.querySelector('i');
       if (icon) icon.className = 'fas fa-sync-alt';

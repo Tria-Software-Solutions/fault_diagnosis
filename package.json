@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/pdfmake": "^0.3.3",
     "@vercel/node": "^5.8.26",
     "typescript": "~5.7.2",
     "vite": "^6.0.0",
@@ -24,6 +25,7 @@
     "exceljs": "^4.4.0",
     "jspdf": "^2.5.1",
     "notyf": "^3.10.0",
+    "pdfmake": "^0.3.11",
     "sonner": "^2.0.7",
     "sweetalert2": "^11.26.25",
     "tailwindcss": "^4.0.0"

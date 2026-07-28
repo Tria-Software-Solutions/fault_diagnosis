@@ -174,22 +174,23 @@ function initTheme(): void {
    Ishikawa Generate
    ========================================================================== */
 
-let _cachedSVGContent: string | null = null;
-let _cachedViewBox: string | null = null;
+let _cachedImgData: string | null = null;
+let _cachedImgWidth = 0;
+let _cachedImgHeight = 0;
 let _cachedMaquina = '';
 let _cachedFecha = '';
 
 /** Re-opens the cached modal (called by "Ver diagrama" button) */
 window.__viewIshikawaModal = function(): void {
-  if (!_cachedSVGContent) {
+  if (!_cachedImgData) {
     showToast('Primero genera el diagrama.', 'warning');
     return;
   }
-  openIshikawaModal(_cachedSVGContent, _cachedViewBox!, _cachedMaquina, _cachedFecha);
+  openIshikawaModal(_cachedImgData, _cachedMaquina, _cachedFecha);
 };
 
-/** Builds and opens the full-screen modal */
-function openIshikawaModal(svgContent: string, viewBox: string, maquina: string, fecha: string): void {
+/** Builds and opens the full-screen modal with canvas-rendered image */
+function openIshikawaModal(imgData: string, maquina: string, fecha: string): void {
   const oldModal = document.getElementById('ishikawa-viewer-modal');
   if (oldModal) oldModal.remove();
 
@@ -209,9 +210,7 @@ function openIshikawaModal(svgContent: string, viewBox: string, maquina: string,
     </div>
     <div class="ish-viewer-body">
       <div class="ish-viewer-svg-wrap">
-        <svg viewBox="${viewBox}" xmlns="http://www.w3.org/2000/svg" class="ish-viewer-svg">
-          ${svgContent}
-        </svg>
+        <img src="${imgData}" alt="Diagrama de Ishikawa" class="ish-viewer-svg" style="width:100%;height:auto;max-width:1600px">
       </div>
     </div>
   </div>`;
@@ -261,8 +260,9 @@ function generateIshikawa(): void {
     }
 
     // Cache for reopen
-    _cachedSVGContent = preview.svgContent;
-    _cachedViewBox = preview.viewBox;
+    _cachedImgData = preview.imgData;
+    _cachedImgWidth = preview.width;
+    _cachedImgHeight = preview.height;
     _cachedMaquina = (document.getElementById('maquina') as HTMLSelectElement)?.value?.trim() || 'Análisis actual';
 
     const fechaContainer = document.getElementById('fechaEvento-container');
@@ -279,11 +279,12 @@ function generateIshikawa(): void {
     _cachedFecha = fechaStr || new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     // Open the modal
-    openIshikawaModal(_cachedSVGContent, _cachedViewBox!, _cachedMaquina, _cachedFecha);
+    openIshikawaModal(_cachedImgData, _cachedMaquina, _cachedFecha);
 
     // Change button to "Ver diagrama" for subsequent clicks
     const btn = document.getElementById('btn-generar-ishikawa');
     if (btn) {
+      btn.setAttribute('data-generated', 'true');
       const icon = btn.querySelector('i');
       if (icon) icon.className = 'fas fa-eye';
       const textSpan = document.getElementById('btn-ishikawa-text');
@@ -293,6 +294,11 @@ function generateIshikawa(): void {
     const infoText = document.getElementById('ish-generate-info-text');
     if (infoText) infoText.textContent = 'Diagrama generado — haz clic en "Ver diagrama" para abrirlo';
   }, 100);
+}
+
+/** Invalidates the cached diagram preview when the user edits any Ishikawa field after generating */
+function invalidateIshikawaCache(): void {
+  _cachedImgData = null;
 }
 
 window.__closeIshikawaViewer = function(): void {
@@ -408,16 +414,6 @@ async function clearAll(skipConfirm = false): Promise<void> {
 
   localStorage.setItem('wizardCleared', 'true');
 
-  // When user invoked directly (not from saveAnalysis/deleteAnalysisFile),
-  // also delete the server file so old data doesn't reappear on refresh
-  if (!skipConfirm) {
-    try {
-      await deleteAnalysis();
-    } catch {
-      // Silently fail if file doesn't exist
-    }
-  }
-
   showTab('captura');
   updateClearAllButton();
 }
@@ -482,17 +478,19 @@ function addDataListeners(): void {
     problemaField.addEventListener('change', () => updateNextButtonState('captura'));
   }
 
-  // Ishikawa fields - check all-filled state for generar button
+  // Ishikawa fields - check all-filled state for generar button and invalidate cached preview
   CATEGORY_ORDER.forEach(cat => {
     const field = document.getElementById(`ishikawa-${cat}`);
     if (field) {
       field.addEventListener('input', () => {
         updateClearAllButton();
         updateIshikawaGenerateBtn();
+        invalidateIshikawaCache();
       });
       field.addEventListener('change', () => {
         updateClearAllButton();
         updateIshikawaGenerateBtn();
+        invalidateIshikawaCache();
       });
     }
   });
