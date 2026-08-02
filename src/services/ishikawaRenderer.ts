@@ -1,5 +1,5 @@
 import { CATEGORY_ORDER, ISHIKAWA_CATEGORY_CONFIG, type RCAIshikawa } from '../state/store';
-import { roundRect, upscaleCanvas } from '../utils/dom';
+import { upscaleCanvas } from '../utils/dom';
 
 /** Re-export utilities needed by Pareto and other canvas functions */
 export { roundRect, upscaleCanvas } from '../utils/dom';
@@ -145,11 +145,8 @@ export function createIshikawaImage(
   const ctx = canvas.getContext('2d')!;
   if (!ctx) return null;
 
-  // Background gradient
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, 500);
-  bgGrad.addColorStop(0, '#f8fafc');
-  bgGrad.addColorStop(1, '#ffffff');
-  ctx.fillStyle = bgGrad;
+  // Background — plain white (no colors)
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvasH);
 
   const categories = CATEGORY_ORDER.map(key => ({
@@ -162,7 +159,7 @@ export function createIshikawaImage(
 
   const hasData = categories.some(c => c.value);
   if (!hasData) {
-    ctx.font = '36px Arial';
+    ctx.font = '28px Arial';
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'center';
     ctx.fillText('No hay datos de Ishikawa disponibles', CANVAS_W / 2, 350);
@@ -171,61 +168,58 @@ export function createIshikawaImage(
   }
 
   // ═══════════════════════════════════════════════
-  //  LAYOUT CONSTANTS — larger & roomier (1.25× scale)
+  //  LAYOUT CONSTANTS — compact, web-sized text
   // ═══════════════════════════════════════════════
 
   const CARD_W = 280;
-  const CARD_R = 12;
-  const HEADER_H = 56;
-  const CONTENT_PAD = 86;
-  const CONTENT_BOT = 24;
-  const MIN_CARD_H = 200;
-  const LINE_H = 48;
+  const CONTENT_PAD = 74;
+  const LINE_H = 34;
   const CARD_TEXT_MAX_W = CARD_W - 44;
-  const FONT_SIZE_CARD = '38px Inter, Arial, sans-serif';
-  const FONT_SIZE_HEADER = 'bold 38px Inter, Arial, sans-serif';
+  const FONT_SIZE_CARD = '26px Inter, Arial, sans-serif';
+  const FONT_SIZE_HEADER = 'bold 26px Inter, Arial, sans-serif';
 
-  const colCenters = [230, 590, 950];
-  const cardUpperXs = [90, 450, 810];
-  const cardLowerXs = [90, 450, 810];
-  const contactXs = [390, 750, 1110];
+  // Columns spread across the full available width (tail → problem box)
+  const colCenters = [360, 800, 1240];
+  const cardUpperXs = [220, 660, 1100];
+  const cardLowerXs = [220, 660, 1100];
+  const contactXs = [440, 880, 1320];
 
   const spineY = 300;
-  const upperCardY = 38;
-  const lowerCardY = 438;
 
-  // ── Dynamic card heights ──
+  // ── Dynamic content heights (no phantom cards) ──
   ctx.font = FONT_SIZE_CARD;
-  const cardHeights = categories.map(cat => {
-    if (!cat.value) return MIN_CARD_H;
-    const lines = countWrapLinesSmart(ctx, cat.value, CARD_TEXT_MAX_W);
-    const contentH = lines * LINE_H;
-    return Math.max(MIN_CARD_H, HEADER_H + CONTENT_PAD + contentH + CONTENT_BOT);
-  });
+  const contentLines = categories.map(cat =>
+    cat.value ? countWrapLinesSmart(ctx, cat.value, CARD_TEXT_MAX_W) : 0
+  );
+  const contentH = contentLines.map(lines => lines * LINE_H);
 
-  // Dynamic spine position based on upper cards
-  let maxUpperBottom = 0;
-  cardHeights.slice(0, 3).forEach(h => {
-    maxUpperBottom = Math.max(maxUpperBottom, upperCardY + h);
-  });
+  // Uniform ribs: every branch spans the same vertical distance from the spine,
+  // so all 6 branches share the exact same inclination and length.
+  const RIB_V = 140;
 
-  const MIN_GAP = 40;
-  let spineShift = 0;
-  if (maxUpperBottom + MIN_GAP > spineY) {
-    spineShift = maxUpperBottom + MIN_GAP - spineY;
+  // Upper text blocks are bottom-aligned at newSpineY - RIB_V; shift the spine
+  // down if the tallest upper block would overflow the top of the canvas.
+  let minUpperTop = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const top = spineY - RIB_V - CONTENT_PAD - contentH[i];
+    if (top < minUpperTop) minUpperTop = top;
   }
+  const TOP_MARGIN = 30;
+  const spineShift = minUpperTop < TOP_MARGIN ? TOP_MARGIN - minUpperTop : 0;
   const newSpineY = spineY + spineShift;
-  const newLowerY = lowerCardY + spineShift;
+  const upperBottom = newSpineY - RIB_V; // ribs end at upper block bottoms
+  const lowerTop = newSpineY + RIB_V;    // ribs end at lower block tops
+  const upperTops = categories.slice(0, 3).map((_c, i) => upperBottom - CONTENT_PAD - contentH[i]);
 
-  // Grow canvas height to fit
-  cardHeights.slice(0, 3).forEach(h => {
-    const bottom = upperCardY + h + 40;
+  // Grow canvas height to fit content
+  for (let i = 0; i < 3; i++) {
+    const bottom = upperTops[i] + CONTENT_PAD + contentH[i] + 20;
     if (bottom > canvasH) canvasH = bottom;
-  });
-  cardHeights.slice(3, 6).forEach(h => {
-    const bottom = newLowerY + h + 40;
+  }
+  for (let i = 3; i < 6; i++) {
+    const bottom = lowerTop + CONTENT_PAD + contentH[i] + 30;
     if (bottom > canvasH) canvasH = bottom;
-  });
+  }
 
   // ── Problem box ──
   const pbW = 400;
@@ -233,21 +227,18 @@ export function createIshikawaImage(
     problemaText ||
     (document.getElementById('descripcionProblema') as HTMLTextAreaElement)?.value?.trim() ||
     'No definido';
-  ctx.font = '38px Inter, Arial, sans-serif';
+  ctx.font = FONT_SIZE_CARD;
   const pbLines = countWrapLinesSmart(ctx, problema, pbW - 44);
-  const pbContentH = pbLines * 48;
-  const pbH = Math.max(200, 100 + pbContentH);
+  const pbContentH = pbLines * LINE_H;
+  const pbH = Math.max(170, 88 + pbContentH);
   const pbX = CANVAS_W - pbW - 44;
-  const pbY = Math.max(newSpineY - Math.floor(pbH / 2) + 10, upperCardY + 20);
+  const pbY = Math.max(newSpineY - Math.floor(pbH / 2) + 10, TOP_MARGIN + 20);
   const pbBottom = pbY + pbH + 40;
   if (pbBottom > canvasH) canvasH = pbBottom;
 
   // ── Finalise canvas ──
   canvas.height = canvasH;
-  const bgGrad2 = ctx.createLinearGradient(0, 0, 0, canvasH);
-  bgGrad2.addColorStop(0, '#f8fafc');
-  bgGrad2.addColorStop(1, '#ffffff');
-  ctx.fillStyle = bgGrad2;
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvasH);
   ctx.lineCap = 'round';
 
@@ -255,23 +246,11 @@ export function createIshikawaImage(
   //  DRAW FISHBONE
   // ═══════════════════════════════════════════════
 
-  function cardShadow(x: number, y: number, w: number, h: number, r: number) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.08)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 3;
-    ctx.fillStyle = '#ffffff';
-    roundRect(ctx, x + 1, y + 2, w, h, r);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // ── Fish tail (navy) — proportional to the problem box ──
+  // ── Fish tail — neutral dark slate, proportional to the problem box ──
   const tailBaseX = 150;
   const tailFinX = 130;
   const tailFinH = 22;
-  ctx.strokeStyle = '#1e3a5f';
+  ctx.strokeStyle = '#1e293b';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(tailBaseX, newSpineY);
@@ -288,25 +267,25 @@ export function createIshikawaImage(
   ctx.stroke();
 
   // ── Spine ──
-  ctx.strokeStyle = '#1e3a5f';
+  ctx.strokeStyle = '#1e293b';
   ctx.lineWidth = 6;
   ctx.beginPath();
   ctx.moveTo(tailBaseX, newSpineY);
-  const spineEnd = pbX - 16;
+  const spineEnd = pbX - 6;
   ctx.lineTo(spineEnd, newSpineY);
   ctx.stroke();
 
-  // ── Arrow tip ──
-  ctx.fillStyle = '#2563eb';
+  // ── Arrow tip (bigger, reaching toward the problem box) ──
+  ctx.fillStyle = '#1e293b';
   ctx.beginPath();
   ctx.moveTo(spineEnd, newSpineY);
-  ctx.lineTo(spineEnd - 40, newSpineY - 12);
-  ctx.lineTo(spineEnd - 40, newSpineY + 12);
+  ctx.lineTo(spineEnd - 64, newSpineY - 20);
+  ctx.lineTo(spineEnd - 64, newSpineY + 20);
   ctx.closePath();
   ctx.fill();
 
   // ── Contact marks ──
-  ctx.strokeStyle = '#1e3a5f';
+  ctx.strokeStyle = '#334155';
   ctx.lineWidth = 3;
   ctx.beginPath();
   contactXs.forEach(x => {
@@ -315,114 +294,62 @@ export function createIshikawaImage(
   });
   ctx.stroke();
 
-  // ── Branches (blue) ──
-  ctx.strokeStyle = '#3b82f6';
+  // ── Branches — all ribs with identical inclination & length ──
+  ctx.strokeStyle = '#334155';
   ctx.lineWidth = 4;
   categories.slice(0, 3).forEach((_cat, i) => {
-    const ch = cardHeights[i];
-    const branchY1 = upperCardY + ch;
     ctx.beginPath();
-    ctx.moveTo(colCenters[i], branchY1);
+    ctx.moveTo(colCenters[i], upperBottom);
     ctx.lineTo(contactXs[i], newSpineY);
     ctx.stroke();
   });
   categories.slice(3, 6).forEach((_cat, i) => {
     ctx.beginPath();
-    ctx.moveTo(colCenters[i], newLowerY);
+    ctx.moveTo(colCenters[i], lowerTop);
     ctx.lineTo(contactXs[i], newSpineY);
     ctx.stroke();
   });
 
-  // ── Cards ──
-  const catColors: Record<string, string> = {
-    maquina: '#dbeafe', metodo: '#dcfce7', materiales: '#fef3c7',
-    manoObra: '#fce7f3', medicion: '#ede9fe', medioAmbiente: '#ccfbf1'
-  };
-
+  // ── Cards — flat, no shadow, no border, no divider ──
   categories.forEach((cat, i) => {
     const isUpper = i < 3;
     const x = isUpper ? cardUpperXs[i] : cardLowerXs[i - 3];
-    const cy = isUpper ? upperCardY : newLowerY;
-    const h = cardHeights[i];
+    const cy = isUpper ? upperTops[i] : lowerTop;
     const hasContent = !!cat.value;
 
-    cardShadow(x, cy, CARD_W, h, CARD_R);
-
-    ctx.lineWidth = 1.5;
-    ctx.fillStyle = catColors[cat.key] || '#f1f5f9';
-    ctx.strokeStyle = hasContent ? '#3b82f6' : '#cbd5e1';
-    roundRect(ctx, x, cy, CARD_W, h, CARD_R);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.strokeStyle = hasContent ? '#93c5fd' : '#e2e8f0';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x + 22, cy + HEADER_H);
-    ctx.lineTo(x + CARD_W - 22, cy + HEADER_H);
-    ctx.stroke();
-
-    ctx.fillStyle = '#1e3a5f';
+    ctx.fillStyle = '#0f172a';
     ctx.font = FONT_SIZE_HEADER;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(cat.label, x + CARD_W / 2, cy + 28);
 
     if (hasContent) {
-      ctx.fillStyle = '#1e40af';
+      ctx.fillStyle = '#334155';
       ctx.font = FONT_SIZE_CARD;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       wrapCanvasTextSmart(ctx, cat.value, x + 22, cy + CONTENT_PAD, CARD_TEXT_MAX_W, LINE_H);
     } else {
       ctx.fillStyle = '#94a3b8';
-      ctx.font = 'italic 28px Arial, sans-serif';
+      ctx.font = 'italic 21px Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('—', x + CARD_W / 2, cy + h / 2 + 6);
+      ctx.fillText('—', x + CARD_W / 2, cy + CONTENT_PAD + 20);
     }
   });
 
-  // ── Problem box ──
-  ctx.save();
-  ctx.shadowColor = 'rgba(30, 58, 95, 0.25)';
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetX = 3;
-  ctx.shadowOffsetY = 4;
-  ctx.fillStyle = '#1e3a5f';
-  roundRect(ctx, pbX, pbY, pbW, pbH, 14);
-  ctx.fill();
-  ctx.restore();
-
-  ctx.fillStyle = '#1e3a5f';
-  roundRect(ctx, pbX, pbY, pbW, pbH, 14);
-  ctx.fill();
-
-  const pbGrad = ctx.createLinearGradient(pbX, pbY, pbX, pbY + pbH);
-  pbGrad.addColorStop(0, 'rgba(255,255,255,0.08)');
-  pbGrad.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = pbGrad;
-  roundRect(ctx, pbX, pbY, pbW, pbH, 14);
-  ctx.fill();
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 38px Inter, Arial, sans-serif';
+  // ── Problem box — flat, no shadow, no border, no divider ──
+  ctx.fillStyle = '#0f172a';
+  ctx.font = FONT_SIZE_HEADER;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillText('PROBLEMA', pbX + pbW / 2, pbY + 26);
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pbX + 32, pbY + 62);
-  ctx.lineTo(pbX + pbW - 32, pbY + 62);
-  ctx.stroke();
-
-  ctx.fillStyle = '#93c5fd';
-  ctx.font = '38px Inter, Arial, sans-serif';
+  ctx.fillStyle = '#334155';
+  ctx.font = FONT_SIZE_CARD;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  wrapCanvasTextSmart(ctx, problema, pbX + 22, pbY + 76, pbW - 44, 48);
+  wrapCanvasTextSmart(ctx, problema, pbX + 22, pbY + 70, pbW - 44, LINE_H);
 
   const scIshikawa = upscaleCanvas(canvas, upscale);
   return { imgData: scIshikawa.toDataURL(), width: scIshikawa.width, height: scIshikawa.height };
