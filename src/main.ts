@@ -337,6 +337,9 @@ async function saveAnalysis(): Promise<void> {
 
     // Clear the wizard completely — start fresh
     await clearAll(true);
+
+    // Redirect to the data table to show the updated entry
+    openTableView();
   } catch (err) {
     handleError(err, 'guardar el análisis');
   }
