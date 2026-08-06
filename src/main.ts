@@ -19,8 +19,8 @@ import {
 import { addAccion, removeAccion, addAccionToDOM, clearActionPlan } from './components/plan';
 import { renderDatepicker, getDatepickerValue, setDatepickerValue } from './components/datepicker';
 import { toggleReviewDrawer, openReviewDrawer, closeReviewDrawer, renderDrawerTable } from './components/drawer';
-import { toggleTableView, openTableView, closeTableView, renderDataTable, startEdit, saveEdit, cancelEdit, deleteField, deleteSection, deletePlanRow, switchDataTab } from './components/data-table';
-import { exportExcel, exportAllExcel } from './services/exportExcel';
+import { toggleTableView, openTableView, closeTableView, renderDataTable, startEdit, saveEdit, cancelEdit, deleteField, deleteSection, deletePlanRow, switchDataTab, exportFilteredTableExcel } from './components/data-table';
+import { exportExcel } from './services/exportExcel';
 import { handlePDFExport, createSimplifiedIshikawa, createSimplifiedPareto, exportAllPDF } from './services/exportPDF';
 import { recordRootCauseForPareto, getIshikawaParetoData, getAccumulatedParetoData } from './services/pareto';
 import { getIshikawaHistory, updateIshikawaForMachine } from './services/ishikawaHistory';
@@ -127,7 +127,7 @@ function registerGlobalAPI(): void {
     exportAllPDF(savedAnalyses);
   };
   window.__exportFullExcel = async () => {
-    exportAllExcel(savedAnalyses);
+    await exportFilteredTableExcel();
   };
   window.__startEdit = startEdit;
   window.__saveEdit = (key: string) => saveEdit(key, renderWhysWizard, refreshIshikawaDiagram, persistCurrentState);

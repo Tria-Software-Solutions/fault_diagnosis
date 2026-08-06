@@ -4,7 +4,7 @@ import { confirmAction } from '../utils/confirm';
 import { showToast } from '../utils/toast';
 import { generateIshikawaPreview } from './ishikawa';
 import { exportSingleRowPDF, exportAllPDF } from '../services/exportPDF';
-import { exportSingleRowExcel, exportAllExcel } from '../services/exportExcel';
+import { exportSingleRowExcel, exportAllExcel, exportFlatSheets } from '../services/exportExcel';
 import { closeReviewDrawer, renderDrawerTable } from './drawer';
 import { addAccionToDOM } from './plan';
 import { updateEntryById, deleteAnalysisById, loadAnalysis } from '../services/analysisStorage';
@@ -19,6 +19,61 @@ let currentDataTab: DataSection = 'captura';
 // Filter state for Mes-Año + Máquina
 let filterMonth = '';
 let filterMachine = '';
+
+// Pagination state
+let currentPage = 1;
+const PAGE_SIZE = 10;
+
+/** Returns entries filtered by the current Mes-Año + Máquina filters */
+function getFilteredEntries(): import('../state/store').AnalysisEntry[] {
+  return savedAnalyses.filter(entry => {
+    const fechaAnalisis = entry.data.captura?.fecha?.[0] || '';
+    if (filterMonth && fechaAnalisis.substring(0, 7) !== filterMonth) return false;
+    if (filterMachine && entry.data.captura?.maquina?.trim() !== filterMachine) return false;
+    return true;
+  });
+}
+
+/** Total number of pages for a given amount of entries */
+function getTotalPages(count: number): number {
+  return Math.max(1, Math.ceil(count / PAGE_SIZE));
+}
+
+/** Builds the pagination controls (prev / page numbers / next) */
+function buildPaginationHtml(total: number, start: number, end: number): string {
+  const maxPage = getTotalPages(total);
+  const pageBtn = (p: number, label?: string) =>
+    `<button class="page-btn ${p === currentPage ? 'is-active' : ''}" onclick="window.__goToPage(${p})">${label ?? p}</button>`;
+  let pageBtns = '';
+  if (maxPage <= 7) {
+    for (let p = 1; p <= maxPage; p++) pageBtns += pageBtn(p);
+  } else {
+    pageBtns += pageBtn(1);
+    const from = Math.max(2, currentPage - 1);
+    const to = Math.min(maxPage - 1, currentPage + 1);
+    if (from > 2) pageBtns += '<span class="page-ellipsis">…</span>';
+    for (let p = from; p <= to; p++) pageBtns += pageBtn(p);
+    if (to < maxPage - 1) pageBtns += '<span class="page-ellipsis">…</span>';
+    pageBtns += pageBtn(maxPage);
+  }
+  const prevDisabled = currentPage <= 1 ? 'disabled' : '';
+  const nextDisabled = currentPage >= maxPage ? 'disabled' : '';
+  return `<div class="data-table-pagination">
+    <span class="data-table-pagination-info"><i class="fas fa-list-alt"></i> Mostrando ${start}–${end} de ${total} registro${total === 1 ? '' : 's'}</span>
+    <div class="pagination-nav">
+      <button class="page-btn" ${prevDisabled} onclick="window.__goToPage(${currentPage - 1})" title="Anterior"><i class="fas fa-chevron-left"></i></button>
+      ${pageBtns}
+      <button class="page-btn" ${nextDisabled} onclick="window.__goToPage(${currentPage + 1})" title="Siguiente"><i class="fas fa-chevron-right"></i></button>
+    </div>
+  </div>`;
+}
+
+/** Goes to a specific page and re-renders the table */
+window.__goToPage = function(page: number): void {
+  const maxPage = getTotalPages(getFilteredEntries().length);
+  currentPage = Math.min(Math.max(1, page), maxPage);
+  renderDataTable();
+};
 
 /** Opens or closes the data table view */
 export function toggleTableView(): void {
@@ -79,6 +134,7 @@ export function closeTableView(): void {
 export function switchDataTab(section: DataSection): void {
   if (savedAnalyses.length === 0) return; // No data, can't switch
   currentDataTab = section;
+  currentPage = 1;
   renderDataTable();
   updateSubtabUI();
 }
@@ -246,6 +302,7 @@ function applyFilterAndSync(): void {
 /** Sets the month filter and refreshes the list */
 window.__setFilterMonth = function(val: string): void {
   filterMonth = val;
+  currentPage = 1;
   renderAnalysisFilters();
   applyFilterAndSync();
 };
@@ -253,6 +310,7 @@ window.__setFilterMonth = function(val: string): void {
 /** Sets the machine filter and refreshes the list */
 window.__setFilterMachine = function(val: string): void {
   filterMachine = val;
+  currentPage = 1;
   renderAnalysisFilters();
   applyFilterAndSync();
 };
@@ -266,25 +324,30 @@ export function renderDataTable(): void {
   updateSubtabDisabled();
 
   if (savedAnalyses.length === 0) {
-    container.innerHTML = `<div class="text-center py-8 text-gray-400">
-      <i class="fas fa-database text-3xl mb-3 block"></i>
+    container.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-center py-8 text-gray-400">
+      <i class="fas fa-database text-3xl mb-3"></i>
       <p>No hay análisis guardados.</p>
       <p class="text-xs">Completa el wizard y guarda para ver los datos aquí.</p>
     </div>`;
     return;
   }
 
-  // Filter entries
-  const filtered = savedAnalyses.filter(entry => {
-    const fechaAnalisis = entry.data.captura?.fecha?.[0] || '';
-    if (filterMonth && fechaAnalisis.substring(0, 7) !== filterMonth) return false;
-    if (filterMachine && entry.data.captura?.maquina?.trim() !== filterMachine) return false;
-    return true;
-  });
+  // Filter + paginate entries
+  const filtered = getFilteredEntries();
+  const maxPage = getTotalPages(filtered.length);
+  if (currentPage > maxPage) currentPage = maxPage;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageEntries = filtered.slice(start, start + PAGE_SIZE);
+
+  // Pagination controls (only when there are results)
+  let paginationHtml = '';
+  if (filtered.length > 0) {
+    paginationHtml = buildPaginationHtml(filtered.length, start + 1, start + pageEntries.length);
+  }
 
   // For Plan section, show actions table for each entry separately
   if (currentDataTab === 'plan') {
-    const allTables = filtered.map((entry, idx) => {
+    const allTables = pageEntries.map((entry, idx) => {
       const maquina = entry.data.captura?.maquina || 'Sin máquina';
       const problema = entry.data.captura?.problema || '';
       const fecha = formatDate(entry.data.captura?.fecha);
@@ -293,7 +356,7 @@ export function renderDataTable(): void {
       return `<div class="mb-4 p-3 bg-base-200/50 rounded-lg border border-base-300">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-            <span class="badge badge-primary badge-sm">#${idx + 1}</span>
+            <span class="badge badge-primary badge-sm">#${start + idx + 1}</span>
             <span>${escapeHtml(maquina)}</span>
             <span class="text-base-content/50">•</span>
             <span class="text-base-content/70">${escapeHtml(problema.substring(0, 40))}</span>
@@ -309,7 +372,7 @@ export function renderDataTable(): void {
       </div>`;
     }).join('');
 
-    container.innerHTML = allTables || `<div class="text-center py-6 text-gray-400">Sin resultados con los filtros actuales</div>`;
+    container.innerHTML = `<div class="data-table-scroll">${allTables || `<div class="text-center py-6 text-base-content/40">Sin resultados con los filtros actuales</div>`}</div>` + paginationHtml;
     return;
   }
 
@@ -326,8 +389,8 @@ export function renderDataTable(): void {
     extraHeaderCells +
     `<th class="w-28 text-center">Acciones</th>`;
 
-  // Build data rows
-  const rows = filtered.map((entry, idx) => {
+  // Build data rows (only for current page)
+  const rows = pageEntries.map((entry, idx) => {
     const cells = headers.map(h => {
       const display = getEntryDisplayValue(entry, currentDataTab, h.key);
       return `<td class="text-sm">${display ? escapeHtml(display) : '<span class="text-base-content/30">—</span>'}</td>`;
@@ -360,23 +423,21 @@ export function renderDataTable(): void {
     </td>`;
 
     return `<tr>
-      <td class="text-center text-xs font-mono text-base-content/40">${idx + 1}</td>
+      <td class="text-center text-xs font-mono text-base-content/40">${start + idx + 1}</td>
       ${cells}
       ${diagramCell}
       ${actions}
     </tr>`;
   }).join('');
 
-  let html = `<div class="overflow-x-auto rounded-box border border-base-200">
+  let html = `<div class="data-table-scroll overflow-x-auto rounded-box border border-base-200">
     <table class="table table-zebra table-pin-rows w-full">
       <thead><tr>${headerCells}</tr></thead>
       <tbody>${rows || '<tr><td colspan="10" class="text-center py-6 text-base-content/40">Sin resultados con los filtros actuales</td></tr>'}</tbody>
     </table>
   </div>`;
 
-  // No Ishikawa preview below the table — diagram is viewed per row via the Diagrama column
-
-  container.innerHTML = html;
+  container.innerHTML = html + paginationHtml;
 }
 
 /** Deletes an analysis entry by its ID */
@@ -413,6 +474,83 @@ window.__exportSingleExcel = async function(entryId: string): Promise<void> {
   if (!entry) return;
   await exportAllExcel([entry], false);
 };
+
+/* ==========================================================================
+   Flat Excel Export (Todos los Datos)
+   Exports the filtered rows as plain tables — one sheet per section
+   (Captura, 5 Porqués, Plan) — matching the table row format. The Ishikawa
+   diagram lives in the PDF, so it's skipped here.
+   ========================================================================== */
+
+const GENERAL_PRIORITY_LABELS: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+
+type FlatSheetPayload = { name: string; headers: string[]; rows: string[][] };
+
+/** One flat sheet from a data section (same columns as the table view) */
+function buildFlatSheet(name: string, section: DataSection, entries: import('../state/store').AnalysisEntry[]): FlatSheetPayload {
+  const headers = getSectionHeaders(section);
+  return {
+    name,
+    headers: ['#', ...headers.map(h => h.label)],
+    rows: entries.map((entry, i) => [String(i + 1), ...headers.map(h => getEntryDisplayValue(entry, section, h.key))]),
+  };
+}
+
+/** Flat Plan sheet: one row per acción, grouped per analysis */
+function buildPlanSheet(entries: Array<import('../state/store').AnalysisEntry>): FlatSheetPayload {
+  const headers = ['#', 'Máquina', 'Problema', 'Tipo', 'Descripción', 'Responsable', 'Fecha', 'Prioridad'];
+  const rows: string[][] = [];
+  entries.forEach((entry, i) => {
+    const num = String(i + 1);
+    const maquina = entry.data.captura?.maquina || 'Sin máquina';
+    const problema = entry.data.captura?.problema || '';
+    const acc = entry.data.acciones || { correctivas: [], preventivas: [] };
+    const items: Array<{ tipo: string; a: { descripcion?: string; responsable?: string; fecha?: string; prioridad?: string } }> = [];
+    (acc.correctivas || []).forEach((a: any) => items.push({ tipo: 'Correctiva', a }));
+    (acc.preventivas || []).forEach((a: any) => items.push({ tipo: 'Preventiva', a }));
+    if (items.length === 0) {
+      rows.push([num, maquina, problema, '—', '—', '—', '—', '—']);
+      return;
+    }
+    items.forEach(({ tipo, a }) => {
+      rows.push([
+        num, maquina, problema, tipo,
+        a.descripcion || '—',
+        a.responsable || '—',
+        a.fecha ? formatDate(a.fecha) || '—' : '—',
+        a.prioridad ? GENERAL_PRIORITY_LABELS[a.prioridad] || a.prioridad : '—',
+      ]);
+    });
+  });
+  return { name: 'Plan', headers, rows };
+}
+
+/** Exports the filtered analyses (respecting Mes-Año/Máquina) as flat sheets */
+export async function exportFilteredTableExcel(): Promise<void> {
+  const filtered = getFilteredEntries();
+  if (filtered.length === 0) {
+    showToast('No hay registros con los filtros actuales.', 'warning');
+    return;
+  }
+
+  // Build the applied-filter label for the Excel title
+  const filterParts: string[] = [];
+  if (filterMonth) {
+    const [y, m] = filterMonth.split('-');
+    const names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    filterParts.push(`${names[parseInt(m, 10) - 1]} ${y}`);
+  }
+  if (filterMachine) filterParts.push(`Máquina: ${filterMachine}`);
+  const filterLabel = filterParts.join(' • ');
+
+  const sheets: FlatSheetPayload[] = [
+    buildFlatSheet('Captura', 'captura', filtered),
+    buildFlatSheet('5 Porqués', '5whys', filtered),
+    buildPlanSheet(filtered),
+  ];
+
+  await exportFlatSheets(sheets, filterLabel, filtered);
+}
 
 /** Opens a full-screen modal showing the Ishikawa diagram for a specific entry */
 window.__viewIshikawaDiagram = function(entryId: string): void {
@@ -502,6 +640,7 @@ declare global {
   interface Window {
     __setFilterMonth: (val: string) => void;
     __setFilterMachine: (val: string) => void;
+    __goToPage: (page: number) => void;
     __deleteEntryById: (entryId: string) => Promise<void>;
     __exportSinglePDF: (entryId: string) => Promise<void>;
     __exportSingleExcel: (entryId: string) => Promise<void>;

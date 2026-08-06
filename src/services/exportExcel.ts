@@ -3,7 +3,7 @@ import { formatDateDDMMYYYY, splitTextValues } from '../utils/text';
 import { saveBlob } from '../utils/download';
 import { showToast } from '../utils/toast';
 import { handleError } from '../utils/errorHandler';
-import { createSimplifiedIshikawa, createSimplifiedPareto, buildIndividualFilename, formatFechas, formatFechaLarga, formatTiempoParo } from './exportPDF';
+import { createSimplifiedPareto, buildIndividualFilename, formatFechas, formatFechaLarga, formatTiempoParo } from './exportPDF';
 import { recordRootCauseForPareto } from './pareto';
 import { getAccumulatedParetoData } from './pareto';
 import ExcelJS from 'exceljs';
@@ -266,11 +266,7 @@ export async function exportSingleRowExcel(
     infoValues(data.captura || {}, data.whys || {}, accI),
     { greenCol: 13 });
 
-  // ── Sheet 2: Ishikawa (imagen) ──
-  const ishImg = createSimplifiedIshikawa(data.ishikawa || {}, data.captura?.problema || '', 2);
-  addImageSheet(workbook, 'Ishikawa', 'Ishikawa', `Análisis #1 — ${data.captura?.maquina || 'Sin máquina'}`, ishImg, 'No se registraron datos en el diagrama de Ishikawa.', 720);
-
-  // ── Sheet 3: Pareto (imagen) ──
+  // ── Sheet 2: Pareto (imagen) ──
   const maqName = data.captura?.maquina || '';
   const paretoImg = createSimplifiedPareto(getAccumulatedParetoData(maqName));
   addImageSheet(workbook, 'Pareto', 'Pareto', `Análisis #1 — ${data.captura?.maquina || 'Sin máquina'}`, paretoImg, 'No hay datos de Pareto disponibles.', 620);
@@ -316,20 +312,6 @@ export async function exportAllExcel(analyses: Array<{ id: string; savedAt: stri
     });
   });
 
-  // ── Sheet: Ishikawa — todos los diagramas, agrupados por máquina ──
-  const ishSheet = workbook.addWorksheet('Ishikawa');
-  ishSheet.getColumn(1).width = excelColWidthForPx(720);
-  const ishTitleRow = ishSheet.addRow(['Ishikawa']);
-  applyRowStyle(ishTitleRow, headerStyle(XL.navy));
-  ishTitleRow.height = 28;
-
-  machines.forEach((entries, machine) => {
-    entries.forEach(({ num, data }) => {
-      const img = createSimplifiedIshikawa(data.ishikawa || {}, data.captura?.problema || '', 2);
-      addImageSection(ishSheet, workbook, `Análisis #${num} — ${machine}`, img, 'No se registraron datos en el diagrama de Ishikawa.', 720);
-    });
-  });
-
   // ── Sheet: Pareto — una gráfica por análisis (datos acumulados por máquina) ──
   const paretoSheet = workbook.addWorksheet('Pareto');
   paretoSheet.getColumn(1).width = excelColWidthForPx(620);
@@ -347,6 +329,64 @@ export async function exportAllExcel(analyses: Array<{ id: string; savedAt: stri
 
   const fName = useGeneralName ? buildGeneralName(analyses, 'xlsx') : buildIndividualFilename(analyses[0].data.captura?.maquina, analyses[0].data.captura?.fecha, 'xlsx');
   await downloadWorkbook(workbook, fName);
+}
+
+/* ==========================================================================
+   Export: Flat Tables (Todos los Datos view)
+   One plain sheet per section (Captura / 5 Porqués / Plan) — a single
+   header row and one row per record, matching the table rows on screen.
+   ========================================================================== */
+
+export interface FlatSheetTable {
+  name: string;
+  headers: string[];
+  rows: string[][];
+}
+
+export async function exportFlatSheets(
+  sheets: FlatSheetTable[],
+  filterLabel: string,
+  analyses: Array<{ id: string; savedAt: string; data: RCAData }>,
+): Promise<void> {
+  if (!sheets.length) { showToast('No hay datos para exportar.', 'warning'); return; }
+  const workbook = new ExcelJS.Workbook();
+
+  sheets.forEach(table => {
+    const ws = workbook.addWorksheet(table.name);
+    const n = table.headers.length;
+    INFO_WIDTHS.slice(0, n).forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+    // Title row (merged) with the applied filter info
+    const title = filterLabel
+      ? `Todos los Datos — ${table.rows.length} registro${table.rows.length === 1 ? '' : 's'} · ${filterLabel}`
+      : `Todos los Datos — ${table.rows.length} registro${table.rows.length === 1 ? '' : 's'}`;
+    const tRow = ws.addRow([title, ...Array(Math.max(n - 1, 0)).fill('')]);
+    applyRowStyle(tRow, headerStyle(XL.navy));
+    tRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    tRow.height = 28;
+    ws.mergeCells(1, 1, 1, n);
+
+    // Column headers row
+    const hRow = ws.addRow(table.headers);
+    applyRowStyle(hRow, headerStyle(XL.blue));
+    hRow.height = 22;
+
+    // Data rows (zebra striping + wrap text)
+    table.rows.forEach((r, idx) => {
+      const dRow = ws.addRow(r);
+      dRow.eachCell((c) => {
+        c.font = { size: 10, name: 'Calibri', color: { argb: XL.slateDark } };
+        c.alignment = { vertical: 'top', wrapText: true };
+        c.border = { top: { style: 'thin', color: { argb: XL.grayBorder } }, bottom: { style: 'thin', color: { argb: XL.grayBorder } }, left: { style: 'thin', color: { argb: XL.grayBorder } }, right: { style: 'thin', color: { argb: XL.grayBorder } } };
+        if (idx % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.grayBg } } as ExcelJS.Fill;
+      });
+    });
+
+    // Freeze the title + header rows so the header stays visible while scrolling
+    ws.views = [{ state: 'frozen', ySplit: 2 }];
+  });
+
+  await downloadWorkbook(workbook, buildGeneralName(analyses, 'xlsx'));
 }
 
 /* ==========================================================================
@@ -370,11 +410,7 @@ export async function exportExcel(updateIshikawaForMachine: (machine: string, da
       infoValues(rcaData.captura || {}, rcaData.whys || {}, rcaData.acciones || { correctivas: [], preventivas: [] }),
       { greenCol: 13 });
 
-    // ── Sheet 2: Ishikawa (imagen) ──
-    const ishImg = createSimplifiedIshikawa(rcaData.ishikawa || {}, rcaData.captura?.problema || '', 2);
-    addImageSheet(workbook, 'Ishikawa', 'Ishikawa', `Análisis #1 — ${rcaData.captura?.maquina || 'Sin máquina'}`, ishImg, 'No se registraron datos en el diagrama de Ishikawa.', 720);
-
-    // ── Sheet 3: Pareto (imagen) ──
+    // ── Sheet 2: Pareto (imagen) ──
     const maqName = rcaData.captura?.maquina || '';
     const paretoImg = createSimplifiedPareto(getAccumulatedParetoData(maqName));
     addImageSheet(workbook, 'Pareto', 'Pareto', `Análisis #1 — ${rcaData.captura?.maquina || 'Sin máquina'}`, paretoImg, 'No hay datos de Pareto disponibles.', 620);
