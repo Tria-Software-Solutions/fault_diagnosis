@@ -110,6 +110,7 @@ export function openTableView(): void {
   if (stepper) stepper.style.display = 'none';
   if (wizardView) wizardView.classList.add('hidden');
   if (tableView) tableView.classList.remove('hidden');
+  document.body.classList.add('table-view-open');
 }
 
 /** Closes the data table view and returns to previous tab */
@@ -123,6 +124,7 @@ export function closeTableView(): void {
   if (stepper) stepper.style.display = '';
   if (wizardView) wizardView.classList.remove('hidden');
   if (tableView) tableView.classList.add('hidden');
+  document.body.classList.remove('table-view-open');
   if (previousTab && previousTab !== 'tabla') {
     window.__showTab(previousTab);
   } else {

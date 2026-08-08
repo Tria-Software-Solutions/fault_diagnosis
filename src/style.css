@@ -2265,6 +2265,13 @@ body:not(.loading) .main-content {
 /* ==========================================================================
    Full Data Table View
    ========================================================================== */
+/* When the data view is open the page itself must NOT scroll: the table
+   scrolls internally (.data-table-scroll) and the pagination bar stays
+   visible at all times without scrolling. */
+body.table-view-open {
+  overflow: hidden;
+}
+
 #content-tabla {
   display: flex;
   flex-direction: column;
