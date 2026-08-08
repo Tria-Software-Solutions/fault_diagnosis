@@ -1,10 +1,10 @@
-import { buildSectionRows, setEditingKey, getEditingKey, rcaData, savedRcaData, savedAnalyses, selectedAnalysisIndex, setSavedRcaData, setSavedAnalyses, setSelectedAnalysisIndex, syncSavedRcaDataFromSelected, removeActionFromState, persistCurrentState, DATA_SECTIONS, serializeDates, parseDates, formatDate, ISHIKAWA_CATEGORY_CONFIG, type DataSection } from '../state/store';
+import { buildSectionRows, buildPlanHorizontalCell as buildPlanCell, setEditingKey, getEditingKey, rcaData, savedRcaData, savedAnalyses, selectedAnalysisIndex, setSavedRcaData, setSavedAnalyses, setSelectedAnalysisIndex, syncSavedRcaDataFromSelected, removeActionFromState, persistCurrentState, DATA_SECTIONS, serializeDates, parseDates, formatDate, ISHIKAWA_CATEGORY_CONFIG, type DataSection } from '../state/store';
 import { escapeHtml, formatDateDDMMYYYY } from '../utils/text';
 import { confirmAction } from '../utils/confirm';
 import { showToast } from '../utils/toast';
 import { generateIshikawaPreview } from './ishikawa';
-import { exportSingleRowPDF, exportAllPDF } from '../services/exportPDF';
-import { exportSingleRowExcel, exportAllExcel, exportFlatSheets } from '../services/exportExcel';
+import { exportSingleRowPDF, exportAllPDF, formatFechas } from '../services/exportPDF';
+import { exportSingleRowExcel, exportAllExcel, exportFilteredExcel } from '../services/exportExcel';
 import { closeReviewDrawer, renderDrawerTable } from './drawer';
 import { addAccionToDOM } from './plan';
 import { updateEntryById, deleteAnalysisById, loadAnalysis } from '../services/analysisStorage';
@@ -166,7 +166,7 @@ function getEntryDisplayValue(entry: import('../state/store').AnalysisEntry, sec
 
   if (section === 'captura') {
     const raw = captura[key as keyof import('../state/store').RCACaptura];
-    if (key === 'fecha') return formatDate(raw);
+    if (key === 'fecha') return formatFechas(raw);
     if (key === 'tiempoParo') {
       const mins = (raw as string) || '';
       if (!mins) return '';
@@ -205,7 +205,10 @@ function getSectionHeaders(section: DataSection): { label: string; key: string }
       { key: 'tiempoParo', label: 'Tiempo Paro' },
       { key: 'indicador', label: 'Indicador' },
       { key: 'sintomas', label: 'Síntomas' },
-      { key: 'responsable', label: 'Responsable' }
+      { key: 'responsable', label: 'Responsable' },
+      { key: 'ordenMantto', label: 'Orden de Mantto' },
+      { key: 'requisicion', label: 'Requisición' },
+      { key: 'codigoProducto', label: 'Código de Producto' }
     ];
   } else if (section === 'ishikawa') {
     return [
@@ -345,34 +348,81 @@ export function renderDataTable(): void {
     paginationHtml = buildPaginationHtml(filtered.length, start + 1, start + pageEntries.length);
   }
 
-  // For Plan section, show actions table for each entry separately
+// For Plan section, show a single flat table: one row per action across
+  // all filtered entries (same distribution as the other tabs)
   if (currentDataTab === 'plan') {
-    const allTables = pageEntries.map((entry, idx) => {
+    const prioLabels: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+    const prioColors: Record<string, string> = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
+    const estadoLabels: Record<string, string> = { listo: 'Listo', en_proceso: 'En proceso', pendiente: 'Pendiente' };
+    const estadoColors: Record<string, string> = { listo: '#16a34a', en_proceso: '#2563eb', pendiente: '#6b7280' };
+
+    const planRows = pageEntries.flatMap((entry, idx) => {
+      const num = start + idx + 1;
       const maquina = entry.data.captura?.maquina || 'Sin máquina';
-      const problema = entry.data.captura?.problema || '';
-      const fecha = formatDate(entry.data.captura?.fecha);
       const acciones = entry.data.acciones || { correctivas: [], preventivas: [] };
-      const planHtml = buildSectionRows('plan', entry.data);
-      return `<div class="mb-4 p-3 bg-base-200/50 rounded-lg border border-base-300">
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-            <span class="badge badge-primary badge-sm">#${start + idx + 1}</span>
-            <span>${escapeHtml(maquina)}</span>
-            <span class="text-base-content/50">•</span>
-            <span class="text-base-content/70">${escapeHtml(problema.substring(0, 40))}</span>
-            <span class="text-base-content/40 text-xs">${escapeHtml(fecha)}</span>
-          </div>
-          <div class="flex gap-1">
-            <button class="btn btn-ghost btn-xs" onclick="window.__exportSinglePDF('${entry.id}')" title="Exportar PDF"><i class="fas fa-file-pdf text-red-500"></i></button>
-            <button class="btn btn-ghost btn-xs" onclick="window.__exportSingleExcel('${entry.id}')" title="Exportar Excel"><i class="fas fa-file-excel text-green-600"></i></button>
-            <button class="btn btn-ghost btn-xs text-red-500" onclick="window.__deleteEntryById('${entry.id}')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>
-          </div>
+      const list: { tipo: string; label: string; color: string; action: import('../state/store').Accion; idx: number }[] = [
+        ...acciones.correctivas.map((a, i) => ({ tipo: 'correctivas', label: 'Correctiva', color: '#059669', action: a, idx: i })),
+        ...acciones.preventivas.map((a, i) => ({ tipo: 'preventivas', label: 'Preventiva', color: '#2563eb', action: a, idx: i }))
+      ];
+
+      const entryActions = `<td class="text-center">
+        <div class="flex items-center justify-center gap-1">
+          <button class="btn btn-ghost btn-xs btn-square" onclick="window.__editEntryById('${entry.id}')" title="Editar"><i class="fas fa-pen text-blue-500"></i></button>
+          <button class="btn btn-ghost btn-xs btn-square text-red-500" onclick="window.__deleteEntryById('${entry.id}')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>
         </div>
-        ${planHtml}
-      </div>`;
+      </td>`;
+      const exportCells = `<td class="text-center">
+        <div class="flex items-center justify-center gap-1">
+          <button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSinglePDF('${entry.id}')" title="PDF"><i class="fas fa-file-pdf text-red-500"></i></button>
+          <button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSingleExcel('${entry.id}')" title="Excel"><i class="fas fa-file-excel text-green-600"></i></button>
+        </div>
+      </td>`;
+
+      if (list.length === 0) {
+        return [`<tr>
+          <td class="text-center text-xs font-mono text-base-content/40">${num}</td>
+          <td class="text-sm">${escapeHtml(maquina)}</td>
+          <td colspan="5" class="text-center text-base-content/30 italic py-3">Sin acciones registradas</td>
+          ${entryActions}${exportCells}
+        </tr>`];
+      }
+
+      return list.map(({ tipo, label, color, action, idx: actionIdx }) => {
+        const keyPrefix = `plan.${tipo}.${actionIdx}`;
+        const tipoCell = `<td class="text-sm"><span style="color:${color};font-weight:600;font-size:12px">${label}</span></td>`;
+        const prioDisplay = `<span class="plan-prio" style="background:${prioColors[action.prioridad] || '#6b7280'}">${prioLabels[action.prioridad] || action.prioridad}</span>`;
+        const estadoDisplay = `<span class="plan-prio" style="background:${estadoColors[action.estado || 'pendiente']}">${estadoLabels[action.estado || 'pendiente']}</span>`;
+        return `<tr>
+          <td class="text-center text-xs font-mono text-base-content/40">${num}</td>
+          <td class="text-sm font-medium">${escapeHtml(maquina)}</td>
+          ${tipoCell}
+          ${buildPlanCell(`${keyPrefix}.descripcion`, action.descripcion, escapeHtml(action.descripcion || '—'))}
+          ${buildPlanCell(`${keyPrefix}.responsable`, action.responsable, escapeHtml(action.responsable || '—'))}
+          ${buildPlanCell(`${keyPrefix}.fecha`, action.fecha, escapeHtml(formatFechas(action.fecha) || '—'))}
+          ${buildPlanCell(`${keyPrefix}.prioridad`, action.prioridad || '', prioDisplay)}
+          ${buildPlanCell(`${keyPrefix}.estado`, action.estado || '', estadoDisplay)}
+          ${entryActions}${exportCells}
+        </tr>`;
+      });
     }).join('');
 
-    container.innerHTML = `<div class="data-table-scroll">${allTables || `<div class="text-center py-6 text-base-content/40">Sin resultados con los filtros actuales</div>`}</div>` + paginationHtml;
+    container.innerHTML = `<div class="data-table-scroll overflow-x-auto rounded-box border border-base-200">
+      <table class="table table-zebra table-pin-rows w-full min-w-max">
+        <thead><tr>
+          <th class="w-10 text-center">#</th>
+          <th>Máquina</th>
+          <th>Tipo</th>
+          <th>Descripción</th>
+          <th>Responsable</th>
+          <th>Fecha</th>
+          <th>Prioridad</th>
+          <th>Estado</th>
+          <th class="w-28 text-center">Acciones</th>
+          <th class="w-24 text-center">Exportar</th>
+        </tr></thead>
+        <tbody>${planRows || '<tr><td colspan="10" class="text-center py-6 text-base-content/40">Sin resultados con los filtros actuales</td></tr>'}</tbody>
+      </table>
+    </div>` + paginationHtml;
     return;
   }
 
@@ -387,7 +437,8 @@ export function renderDataTable(): void {
   const headerCells = `<th class="w-10 text-center">#</th>` +
     headers.map(h => `<th>${escapeHtml(h.label)}</th>`).join('') +
     extraHeaderCells +
-    `<th class="w-28 text-center">Acciones</th>`;
+    `<th class="w-28 text-center">Acciones</th>` +
+    `<th class="w-24 text-center">Exportar</th>`;
 
   // Build data rows (only for current page)
   const rows = pageEntries.map((entry, idx) => {
@@ -411,14 +462,22 @@ export function renderDataTable(): void {
       }
     }
 
-    // Build action buttons (now without diagram button)
-    let actionBtns = `<button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSinglePDF('${entry.id}')" title="PDF"><i class="fas fa-file-pdf text-red-500"></i></button>
-        <button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSingleExcel('${entry.id}')" title="Excel"><i class="fas fa-file-excel text-green-600"></i></button>
+    // Build action buttons (edit + delete)
+    let actionBtns = `<button class="btn btn-ghost btn-xs btn-square" onclick="window.__editEntryById('${entry.id}')" title="Editar"><i class="fas fa-pen text-blue-500"></i></button>
         <button class="btn btn-ghost btn-xs btn-square text-red-500" onclick="window.__deleteEntryById('${entry.id}')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>`;
+
+    // Build export buttons (PDF + Excel)
+    const exportBtns = `<button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSinglePDF('${entry.id}')" title="PDF"><i class="fas fa-file-pdf text-red-500"></i></button>
+        <button class="btn btn-ghost btn-xs btn-square" onclick="window.__exportSingleExcel('${entry.id}')" title="Excel"><i class="fas fa-file-excel text-green-600"></i></button>`;
 
     const actions = `<td class="text-center">
       <div class="flex items-center justify-center gap-1">
         ${actionBtns}
+      </div>
+    </td>
+    <td class="text-center">
+      <div class="flex items-center justify-center gap-1">
+        ${exportBtns}
       </div>
     </td>`;
 
@@ -431,7 +490,7 @@ export function renderDataTable(): void {
   }).join('');
 
   let html = `<div class="data-table-scroll overflow-x-auto rounded-box border border-base-200">
-    <table class="table table-zebra table-pin-rows w-full">
+    <table class="table table-zebra table-pin-rows w-full min-w-max">
       <thead><tr>${headerCells}</tr></thead>
       <tbody>${rows || '<tr><td colspan="10" class="text-center py-6 text-base-content/40">Sin resultados con los filtros actuales</td></tr>'}</tbody>
     </table>
@@ -476,56 +535,13 @@ window.__exportSingleExcel = async function(entryId: string): Promise<void> {
 };
 
 /* ==========================================================================
-   Flat Excel Export (Todos los Datos)
-   Exports the filtered rows as plain tables — one sheet per section
-   (Captura, 5 Porqués, Plan) — matching the table row format. The Ishikawa
-   diagram lives in the PDF, so it's skipped here.
+   Excel Export (Todos los Datos)
+   Exports the filtered records with the same tabs as the individual export:
+   Información (flat, one row per record) + Pareto. The Ishikawa diagram
+   lives in the PDF, so it's skipped here.
    ========================================================================== */
 
-const GENERAL_PRIORITY_LABELS: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
-
-type FlatSheetPayload = { name: string; headers: string[]; rows: string[][] };
-
-/** One flat sheet from a data section (same columns as the table view) */
-function buildFlatSheet(name: string, section: DataSection, entries: import('../state/store').AnalysisEntry[]): FlatSheetPayload {
-  const headers = getSectionHeaders(section);
-  return {
-    name,
-    headers: ['#', ...headers.map(h => h.label)],
-    rows: entries.map((entry, i) => [String(i + 1), ...headers.map(h => getEntryDisplayValue(entry, section, h.key))]),
-  };
-}
-
-/** Flat Plan sheet: one row per acción, grouped per analysis */
-function buildPlanSheet(entries: Array<import('../state/store').AnalysisEntry>): FlatSheetPayload {
-  const headers = ['#', 'Máquina', 'Problema', 'Tipo', 'Descripción', 'Responsable', 'Fecha', 'Prioridad'];
-  const rows: string[][] = [];
-  entries.forEach((entry, i) => {
-    const num = String(i + 1);
-    const maquina = entry.data.captura?.maquina || 'Sin máquina';
-    const problema = entry.data.captura?.problema || '';
-    const acc = entry.data.acciones || { correctivas: [], preventivas: [] };
-    const items: Array<{ tipo: string; a: { descripcion?: string; responsable?: string; fecha?: string; prioridad?: string } }> = [];
-    (acc.correctivas || []).forEach((a: any) => items.push({ tipo: 'Correctiva', a }));
-    (acc.preventivas || []).forEach((a: any) => items.push({ tipo: 'Preventiva', a }));
-    if (items.length === 0) {
-      rows.push([num, maquina, problema, '—', '—', '—', '—', '—']);
-      return;
-    }
-    items.forEach(({ tipo, a }) => {
-      rows.push([
-        num, maquina, problema, tipo,
-        a.descripcion || '—',
-        a.responsable || '—',
-        a.fecha ? formatDate(a.fecha) || '—' : '—',
-        a.prioridad ? GENERAL_PRIORITY_LABELS[a.prioridad] || a.prioridad : '—',
-      ]);
-    });
-  });
-  return { name: 'Plan', headers, rows };
-}
-
-/** Exports the filtered analyses (respecting Mes-Año/Máquina) as flat sheets */
+/** Exports the filtered analyses (respecting Mes-Año/Máquina) as Excel */
 export async function exportFilteredTableExcel(): Promise<void> {
   const filtered = getFilteredEntries();
   if (filtered.length === 0) {
@@ -543,13 +559,7 @@ export async function exportFilteredTableExcel(): Promise<void> {
   if (filterMachine) filterParts.push(`Máquina: ${filterMachine}`);
   const filterLabel = filterParts.join(' • ');
 
-  const sheets: FlatSheetPayload[] = [
-    buildFlatSheet('Captura', 'captura', filtered),
-    buildFlatSheet('5 Porqués', '5whys', filtered),
-    buildPlanSheet(filtered),
-  ];
-
-  await exportFlatSheets(sheets, filterLabel, filtered);
+  await exportFilteredExcel(filtered, filterLabel);
 }
 
 /** Opens a full-screen modal showing the Ishikawa diagram for a specific entry */
@@ -573,7 +583,7 @@ window.__viewIshikawaDiagram = function(entryId: string): void {
   }
 
   const maquina = entry.data.captura?.maquina || 'Sin máquina';
-  const fecha = formatDate(entry.data.captura?.fecha);
+  const fecha = formatFechas(entry.data.captura?.fecha);
 
   // Create or reuse modal element
   let modal = document.getElementById('ishikawa-viewer-modal');
@@ -646,6 +656,7 @@ declare global {
     __exportSingleExcel: (entryId: string) => Promise<void>;
     __viewIshikawaDiagram: (entryId: string) => void;
     __closeIshikawaViewer: () => void;
+    __editEntryById: (entryId: string) => Promise<void>;
   }
 }
 
@@ -755,7 +766,10 @@ function applyFieldEdit(key: string, value: string): void {
       problema: 'descripcionProblema',
       tiempoParo: 'tiempoParo',
       sintomas: 'sintomas',
-      responsable: 'responsable'
+      responsable: 'responsable',
+      ordenMantto: 'ordenMantto',
+      requisicion: 'requisicion',
+      codigoProducto: 'codigoProducto'
     };
     const elId = domMap[field];
     if (elId) {
@@ -786,12 +800,14 @@ function applyFieldEdit(key: string, value: string): void {
       else if (planField === 'responsable') action.responsable = value;
       else if (planField === 'fecha') action.fecha = value;
       else if (planField === 'prioridad') action.prioridad = value as 'alta' | 'media' | 'baja';
+      else if (planField === 'estado') action.estado = value as 'listo' | 'en_proceso' | 'pendiente';
 
       const fieldSuffix: Record<string, string> = {
         descripcion: 'desc',
         responsable: 'resp',
         fecha: 'fecha',
-        prioridad: 'prio'
+        prioridad: 'prio',
+        estado: 'estado'
       };
       const domFieldId = fieldSuffix[planField] || planField;
       const domTipo = tipo === 'correctivas' ? 'correctiva' : 'preventiva';
@@ -808,6 +824,7 @@ function applyFieldEdit(key: string, value: string): void {
       else if (planField === 'responsable') savedAction.responsable = value;
       else if (planField === 'fecha') savedAction.fecha = value;
       else if (planField === 'prioridad') savedAction.prioridad = value as 'alta' | 'media' | 'baja';
+      else if (planField === 'estado') savedAction.estado = value as 'listo' | 'en_proceso' | 'pendiente';
     }
     savedRcaData.acciones = savedAcciones;
   }
@@ -868,7 +885,7 @@ export async function deleteSection(
   if (section === 'captura') {
     rcaData.captura = {};
     savedRcaData.captura = {};
-    ['maquina', 'descripcionProblema', 'tiempoParo', 'sintomas', 'responsable', 'indicador'].forEach(id => {
+    ['maquina', 'descripcionProblema', 'tiempoParo', 'sintomas', 'responsable', 'indicador', 'ordenMantto', 'requisicion', 'codigoProducto'].forEach(id => {
       const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
       if (el) el.value = '';
     });

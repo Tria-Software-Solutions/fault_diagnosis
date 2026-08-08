@@ -70,7 +70,7 @@
           </div>
         </div>
         <div class="step-body">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
             <div>
               <label class="std-label">Fecha del análisis</label>
               <div id="fechaEvento-container" class="dp-wrap"></div>
@@ -95,6 +95,18 @@
               <input type="number" id="tiempoParo" min="0" placeholder="0" class="input input-bordered w-full">
             </div>
             <div>
+              <label class="std-label" for="ordenMantto">Orden de Mantto</label>
+              <input type="text" id="ordenMantto" placeholder="Opcional" class="input input-bordered w-full">
+            </div>
+            <div>
+              <label class="std-label" for="requisicion">Requisición</label>
+              <input type="text" id="requisicion" placeholder="Opcional" class="input input-bordered w-full">
+            </div>
+            <div>
+              <label class="std-label" for="codigoProducto">Código de producto</label>
+              <input type="text" id="codigoProducto" placeholder="Opcional" class="input input-bordered w-full">
+            </div>
+            <div class="sm:col-span-2">
               <label class="std-label">Indicadores afectados</label>
               <div class="flex flex-wrap gap-2 w-full">
                 <label class="indicador-pill flex-1 min-w-[120px] justify-center">
@@ -112,15 +124,15 @@
                 <input type="hidden" id="indicador" value="">
               </div>
             </div>
-            <div class="sm:col-span-2">
-              <label class="std-label" for="responsable">Responsable del análisis</label>
+            <div>
+              <label class="std-label" for="responsable">Responsable</label>
               <input type="text" id="responsable" name="responsable" placeholder="Nombre del analista" class="input input-bordered w-full">
             </div>
-            <div class="sm:col-span-2">
+            <div class="sm:col-span-3">
               <label class="std-label" for="descripcionProblema">Descripción del problema</label>
-              <textarea id="descripcionProblema" rows="4" placeholder="Describe detalladamente qué ocurrió..." class="textarea textarea-bordered w-full"></textarea>
+              <textarea id="descripcionProblema" rows="5" placeholder="Describe detalladamente qué ocurrió..." class="textarea textarea-bordered w-full"></textarea>
             </div>
-            <div class="sm:col-span-2">
+            <div class="sm:col-span-3">
               <label class="std-label" for="sintomas">Síntomas observados</label>
               <textarea id="sintomas" rows="3" placeholder="¿Qué se observó? ¿Ruidos, olores, vibraciones, alarmas?" class="textarea textarea-bordered w-full"></textarea>
             </div>

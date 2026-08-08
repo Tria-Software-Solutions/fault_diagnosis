@@ -257,6 +257,11 @@ function priorityBadge(p: string): Content {
   return { text: labels[p] || p.toUpperCase(), color: C.slateMid, fontSize: F.body, alignment: 'center', italics: true };
 }
 
+function estadoBadge(e: string): Content {
+  const labels: Record<string, string> = { listo: 'Listo', en_proceso: 'En proceso', pendiente: 'Pendiente' };
+  return { text: labels[e] || e.toUpperCase(), color: C.slateMid, fontSize: F.body, alignment: 'center', italics: true };
+}
+
 const actionTableLayout: TableLayout = {
   fillColor: (i: number) => i % 2 === 1 ? C.grayBg : null,
   hLineWidth: () => 0.4,
@@ -269,7 +274,7 @@ const actionTableLayout: TableLayout = {
   paddingBottom: () => 4,
 };
 
-function actionsTable(list: Array<{ descripcion?: string; responsable?: string; fecha?: string; prioridad?: string }>, label: string): Content[] {
+function actionsTable(list: Array<{ descripcion?: string; responsable?: string; fecha?: string; prioridad?: string; estado?: string }>, label: string): Content[] {
   const blocks: Content[] = [{ text: label, bold: true, fontSize: F.body, color: C.navy, margin: [0, 5, 0, 2] }];
   if (!list.length) { blocks.push(noticeBlock('No se registraron acciones.')); return blocks; }
   // Header cells never wrap — every label stays on a single row (noWrap: true).
@@ -281,6 +286,7 @@ function actionsTable(list: Array<{ descripcion?: string; responsable?: string; 
     { text: 'Responsable', color: C.navy, bold: true, fontSize: F.body, noWrap: true },
     { text: 'Fecha', color: C.navy, bold: true, fontSize: F.body, noWrap: true },
     { text: 'Prioridad', color: C.navy, bold: true, fontSize: F.body, noWrap: true },
+    { text: 'Estado', color: C.navy, bold: true, fontSize: F.body, noWrap: true },
   ]];
   list.forEach((a, i) => {
     body.push([
@@ -290,6 +296,7 @@ function actionsTable(list: Array<{ descripcion?: string; responsable?: string; 
       // Same modern Spanish format as 'Información del Problema' (e.g. "lunes 23 de agosto de 2026")
       { text: formatFechaLarga(a.fecha || '', true), fontSize: F.body, color: C.slate },
       priorityBadge(a.prioridad || ''),
+      estadoBadge(a.estado || 'pendiente'),
     ]);
   });
   // Fixed column widths (only Descripción is flexible) so 'Acciones Correctivas'
@@ -299,7 +306,7 @@ function actionsTable(list: Array<{ descripcion?: string; responsable?: string; 
   // Fecha ~180 (bulletproof for the longest modern date "miércoles 29 de septiembre de 2026"
   //  ≈ 165-175pt text + 10pt padding, so it never wraps on one line),
   // Prioridad ~60 (header + badges).
-  blocks.push({ layout: actionTableLayout, table: { headerRows: 1, widths: [16, '*', 70, 180, 60], body }, margin: [0, 0, 0, 3] });
+  blocks.push({ layout: actionTableLayout, table: { headerRows: 1, widths: [16, '*', 70, 180, 50, 60], body }, margin: [0, 0, 0, 3] });
   return blocks;
 }
 
@@ -376,6 +383,9 @@ function buildCapturaContent(cap: any): Content[] {
     field('Tiempo de paro', formatTiempoParo(cap.tiempoParo || '')),
     field('Indicador(es) afectados', cap.indicador || ''),
     field('Responsable', cap.responsable || ''),
+    field('Orden de Mantto', cap.ordenMantto || ''),
+    field('Requisición', cap.requisicion || ''),
+    field('Código de producto', cap.codigoProducto || ''),
     field('Problema', cap.problema || ''),
     buildSintomasList(cap.sintomas || ''),
   ].filter(Boolean) as Content[];

@@ -1,11 +1,10 @@
-import { rcaData, savedRcaData, getCurrentCauseSummary, type RCAData } from '../state/store';
+import { rcaData, savedRcaData, savedAnalyses, type RCAData } from '../state/store';
 import { formatDateDDMMYYYY, splitTextValues } from '../utils/text';
 import { saveBlob } from '../utils/download';
 import { showToast } from '../utils/toast';
 import { handleError } from '../utils/errorHandler';
 import { createSimplifiedPareto, buildIndividualFilename, formatFechas, formatFechaLarga, formatTiempoParo } from './exportPDF';
-import { recordRootCauseForPareto } from './pareto';
-import { getAccumulatedParetoData } from './pareto';
+import { buildParetoItems } from './pareto';
 import ExcelJS from 'exceljs';
 
 /* ==========================================================================
@@ -41,10 +40,10 @@ function applyRowStyle(row: ExcelJS.Row, style: Partial<ExcelJS.Style>): void {
    Sheet Builder: horizontal table — field labels left-to-right in one navy
    header row, values in a single row below (modern dashboard look).
    The combined single-row table (Información + 5 Porqués + Causa raíz +
-   Acciones pareadas) has 21 columns.
+   Acciones pareadas) has 26 columns.
    ========================================================================== */
 
-const INFO_WIDTHS = [28, 40, 30, 24, 24, 36, 22, 28, 28, 28, 28, 28, 40, 40, 24, 30, 16, 40, 24, 30, 16];
+const INFO_WIDTHS = [28, 40, 30, 24, 24, 36, 22, 28, 28, 28, 28, 28, 40, 40, 24, 30, 24, 24, 24, 40, 30, 24, 30, 24, 16, 16];
 
 function addHorizontalSheet(
   wb: ExcelJS.Workbook,
@@ -104,20 +103,23 @@ function addHorizontalBlock(
   }
 }
 
-/** 8 paired action columns (Correctivas/Preventivas × descripción/responsable/
- *  fecha/prioridad) that extend the single-row table right after Causa raíz.
- *  Multiple actions of a type stack inside the same cell (one per line). */
+/** 10 paired action columns (Correctivas/Preventivas × descripción/
+ *  responsable/fecha/prioridad/estado) that extend the single-row table
+ *  right after Causa raíz. Multiple actions of a type stack inside the same
+ *  cell (one per line). */
 function accRows(acc: { correctivas: any[]; preventivas: any[] }): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = [];
   const groups: Array<[string, any[]]> = [
     ['Correctivas', acc.correctivas || []],
     ['Preventivas', acc.preventivas || []],
   ];
+  const estadoLabels: Record<string, string> = { listo: 'Listo', en_proceso: 'En proceso', pendiente: 'Pendiente' };
   for (const [tipo, list] of groups) {
     rows.push({ label: `${tipo} · Descripción`, value: list.map(a => a.descripcion || '').filter(Boolean).join('\n') });
     rows.push({ label: `${tipo} · Responsable`, value: list.map(a => a.responsable || '').filter(Boolean).join('\n') });
     rows.push({ label: `${tipo} · Fecha`, value: list.map(a => (a.fecha ? formatFechaLarga(a.fecha, true) : '')).filter(Boolean).join('\n') });
     rows.push({ label: `${tipo} · Prioridad`, value: list.map(a => (a.prioridad ? prioLabels[a.prioridad] || '' : '')).filter(Boolean).join('\n') });
+    rows.push({ label: `${tipo} · Estado`, value: list.map(a => (a.estado ? estadoLabels[a.estado] || '' : 'Pendiente')).filter(Boolean).join('\n') });
   }
   return rows;
 }
@@ -211,6 +213,9 @@ function capturaRows(cap: any): Array<{ label: string; value: string }> {
     { label: 'Problema', value: cap.problema || '' },
     { label: 'Síntomas', value: splitTextValues(cap.sintomas || '').join('\n') },
     { label: 'Responsable', value: cap.responsable || '' },
+    { label: 'Orden de Mantto', value: cap.ordenMantto || '' },
+    { label: 'Requisición', value: cap.requisicion || '' },
+    { label: 'Código de producto', value: cap.codigoProducto || '' },
   ];
 }
 
@@ -237,7 +242,7 @@ function getCausaRaiz(whys: any): string {
 }
 
 /** Combined 'todo en un solo row' headers/values: Información (7) + 5 Porqués (5)
- *  + Causa raíz (1) + Acciones pareadas (8) = 21 columns. */
+ *  + Causa raíz (1) + Acciones pareadas (10) = 26 columns. */
 function infoHeaders(cap: any, whys: any, acc: { correctivas: any[]; preventivas: any[] }): string[] {
   return [...capturaRows(cap).map(r => r.label), ...whysRows(whys).map(r => r.label), 'Causa raíz', ...accRows(acc).map(r => r.label)];
 }
@@ -264,11 +269,11 @@ export async function exportSingleRowExcel(
   addHorizontalSheet(workbook, 'Información', 'Información del Diagnóstico',
     infoHeaders(data.captura || {}, data.whys || {}, accI),
     infoValues(data.captura || {}, data.whys || {}, accI),
-    { greenCol: 13 });
+    { greenCol: 16 });
 
-  // ── Sheet 2: Pareto (imagen) ──
+  // ── Sheet 2: Pareto (imagen) — data-driven from the saved analyses ──
   const maqName = data.captura?.maquina || '';
-  const paretoImg = createSimplifiedPareto(getAccumulatedParetoData(maqName));
+  const paretoImg = createSimplifiedPareto(buildParetoItems(savedAnalyses, maqName));
   addImageSheet(workbook, 'Pareto', 'Pareto', `Análisis #1 — ${data.captura?.maquina || 'Sin máquina'}`, paretoImg, 'No hay datos de Pareto disponibles.', 620);
 
   // ── Download ──
@@ -295,36 +300,33 @@ export async function exportAllExcel(analyses: Array<{ id: string; savedAt: stri
   const infoSheet = workbook.addWorksheet('Información');
   INFO_WIDTHS.forEach((w, i) => { infoSheet.getColumn(i + 1).width = w; });
 
-  const infoTitleRow = infoSheet.addRow(['Información de Diagnósticos', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+  const infoTitleRow = infoSheet.addRow(['Información de Diagnósticos', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
   applyRowStyle(infoTitleRow, headerStyle(XL.navy));
   infoTitleRow.height = 28;
-  infoSheet.mergeCells(1, 1, 1, 21);
+  infoSheet.mergeCells(1, 1, 1, 26);
 
   machines.forEach((entries, machine) => {
     entries.forEach(({ num, data }) => {
       // Información + 5 Porqués + Acciones — un solo header (tipo + máquina) + labels por columna + un solo row de datos
-      const hRow = infoSheet.addRow([`Análisis #${num} — Información, 5 Porqués y Acciones · ${machine}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+      const hRow = infoSheet.addRow([`Análisis #${num} — Información, 5 Porqués y Acciones · ${machine}`, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
       applyRowStyle(hRow, headerStyle(XL.blue));
-      infoSheet.mergeCells(infoSheet.rowCount, 1, infoSheet.rowCount, 21);
+      infoSheet.mergeCells(infoSheet.rowCount, 1, infoSheet.rowCount, 26);
       const whys = data.whys || {};
       const acc = data.acciones || { correctivas: [], preventivas: [] };
-      addHorizontalBlock(infoSheet, infoHeaders(data.captura || {}, whys, acc), infoValues(data.captura || {}, whys, acc), { greenCol: 13 });
+      addHorizontalBlock(infoSheet, infoHeaders(data.captura || {}, whys, acc), infoValues(data.captura || {}, whys, acc), { greenCol: 16 });
     });
   });
 
-  // ── Sheet: Pareto — una gráfica por análisis (datos acumulados por máquina) ──
+  // ── Sheet: Pareto — una gráfica por máquina (datos de los análisis guardados) ──
   const paretoSheet = workbook.addWorksheet('Pareto');
   paretoSheet.getColumn(1).width = excelColWidthForPx(620);
   const paretoTitleRow = paretoSheet.addRow(['Pareto']);
   applyRowStyle(paretoTitleRow, headerStyle(XL.navy));
   paretoTitleRow.height = 28;
 
-  machines.forEach((entries, machine) => {
-    const realName = machine === 'Sin máquina' ? '' : machine;
-    entries.forEach(({ num }) => {
-      const paretoImg = createSimplifiedPareto(getAccumulatedParetoData(realName));
-      addImageSection(paretoSheet, workbook, `Análisis #${num} — ${machine}`, paretoImg, 'No hay datos de Pareto disponibles.', 620);
-    });
+  machines.forEach((_entries, machine) => {
+    const paretoImg = createSimplifiedPareto(buildParetoItems(savedAnalyses, machine));
+    addImageSection(paretoSheet, workbook, `Máquina: ${machine}`, paretoImg, 'No hay datos de Pareto disponibles.', 620);
   });
 
   const fName = useGeneralName ? buildGeneralName(analyses, 'xlsx') : buildIndividualFilename(analyses[0].data.captura?.maquina, analyses[0].data.captura?.fecha, 'xlsx');
@@ -332,58 +334,67 @@ export async function exportAllExcel(analyses: Array<{ id: string; savedAt: stri
 }
 
 /* ==========================================================================
-   Export: Flat Tables (Todos los Datos view)
-   One plain sheet per section (Captura / 5 Porqués / Plan) — a single
-   header row and one row per record, matching the table rows on screen.
+   Export: All Filtered Records (Todos los Datos view)
+   Same tabs as the individual export: Información (flat, one row per
+   record, same 26 columns) + Pareto (one chart per machine). Respects the
+   applied Mes-Año/Máquina filter. Ishikawa lives in the PDF, so it's skipped.
    ========================================================================== */
 
-export interface FlatSheetTable {
-  name: string;
-  headers: string[];
-  rows: string[][];
-}
-
-export async function exportFlatSheets(
-  sheets: FlatSheetTable[],
-  filterLabel: string,
+export async function exportFilteredExcel(
   analyses: Array<{ id: string; savedAt: string; data: RCAData }>,
+  filterLabel: string,
 ): Promise<void> {
-  if (!sheets.length) { showToast('No hay datos para exportar.', 'warning'); return; }
+  if (!analyses?.length) { showToast('No hay registros con los filtros actuales.', 'warning'); return; }
   const workbook = new ExcelJS.Workbook();
 
-  sheets.forEach(table => {
-    const ws = workbook.addWorksheet(table.name);
-    const n = table.headers.length;
-    INFO_WIDTHS.slice(0, n).forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  // ── Sheet 1: Información — flat table (same 26 columns as the individual export) ──
+  const infoSheet = workbook.addWorksheet('Información');
+  INFO_WIDTHS.forEach((w, i) => { infoSheet.getColumn(i + 1).width = w; });
+  const headers = infoHeaders({}, {}, { correctivas: [], preventivas: [] });
 
-    // Title row (merged) with the applied filter info
-    const title = filterLabel
-      ? `Todos los Datos — ${table.rows.length} registro${table.rows.length === 1 ? '' : 's'} · ${filterLabel}`
-      : `Todos los Datos — ${table.rows.length} registro${table.rows.length === 1 ? '' : 's'}`;
-    const tRow = ws.addRow([title, ...Array(Math.max(n - 1, 0)).fill('')]);
-    applyRowStyle(tRow, headerStyle(XL.navy));
-    tRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
-    tRow.height = 28;
-    ws.mergeCells(1, 1, 1, n);
+  const title = filterLabel
+    ? `Todos los Datos — ${analyses.length} registro${analyses.length === 1 ? '' : 's'} · ${filterLabel}`
+    : `Todos los Datos — ${analyses.length} registro${analyses.length === 1 ? '' : 's'}`;
+  const tRow = infoSheet.addRow([title, ...Array(headers.length - 1).fill('')]);
+  applyRowStyle(tRow, headerStyle(XL.navy));
+  tRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+  tRow.height = 28;
+  infoSheet.mergeCells(1, 1, 1, headers.length);
 
-    // Column headers row
-    const hRow = ws.addRow(table.headers);
-    applyRowStyle(hRow, headerStyle(XL.blue));
-    hRow.height = 22;
+  const hRow = infoSheet.addRow(headers);
+  applyRowStyle(hRow, headerStyle(XL.blue));
+  hRow.height = 22;
 
-    // Data rows (zebra striping + wrap text)
-    table.rows.forEach((r, idx) => {
-      const dRow = ws.addRow(r);
-      dRow.eachCell((c) => {
-        c.font = { size: 10, name: 'Calibri', color: { argb: XL.slateDark } };
-        c.alignment = { vertical: 'top', wrapText: true };
-        c.border = { top: { style: 'thin', color: { argb: XL.grayBorder } }, bottom: { style: 'thin', color: { argb: XL.grayBorder } }, left: { style: 'thin', color: { argb: XL.grayBorder } }, right: { style: 'thin', color: { argb: XL.grayBorder } } };
-        if (idx % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.grayBg } } as ExcelJS.Fill;
-      });
+  // One row per filtered record, with the same styling as the individual table
+  analyses.forEach((analysis, idx) => {
+    const data = analysis.data;
+    const dRow = infoSheet.addRow(infoValues(data.captura || {}, data.whys || {}, data.acciones || { correctivas: [], preventivas: [] }));
+    dRow.eachCell((c) => {
+      c.font = { size: 10, name: 'Calibri', color: { argb: XL.slateDark } };
+      c.alignment = { vertical: 'top', wrapText: true };
+      c.border = { top: { style: 'thin', color: { argb: XL.grayBorder } }, bottom: { style: 'thin', color: { argb: XL.grayBorder } }, left: { style: 'thin', color: { argb: XL.grayBorder } }, right: { style: 'thin', color: { argb: XL.grayBorder } } };
+      if (idx % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.grayBg } } as ExcelJS.Fill;
     });
+    // Causa raíz = column 13 → green highlight (same as the individual export)
+    const g = dRow.getCell(16);
+    g.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.greenLight } } as ExcelJS.Fill;
+    g.font = { bold: true, size: 10, name: 'Calibri', color: { argb: XL.greenDark } };
+  });
 
-    // Freeze the title + header rows so the header stays visible while scrolling
-    ws.views = [{ state: 'frozen', ySplit: 2 }];
+  // Freeze the title + header rows so the header stays visible while scrolling
+  infoSheet.views = [{ state: 'frozen', ySplit: 2 }];
+
+  // ── Sheet 2: Pareto — one chart per machine present in the exported set ──
+  const paretoSheet = workbook.addWorksheet('Pareto');
+  paretoSheet.getColumn(1).width = excelColWidthForPx(620);
+  const paretoTitleRow = paretoSheet.addRow(['Pareto']);
+  applyRowStyle(paretoTitleRow, headerStyle(XL.navy));
+  paretoTitleRow.height = 28;
+
+  const machines = [...new Set(analyses.map(a => (a.data.captura?.maquina || '').trim() || 'Sin máquina'))];
+  machines.forEach(machine => {
+    const paretoImg = createSimplifiedPareto(buildParetoItems(analyses, machine));
+    addImageSection(paretoSheet, workbook, `Máquina: ${machine}`, paretoImg, 'Sin datos de Pareto para esta máquina.', 620);
   });
 
   await downloadWorkbook(workbook, buildGeneralName(analyses, 'xlsx'));
@@ -395,7 +406,6 @@ export async function exportFlatSheets(
 
 export async function exportExcel(updateIshikawaForMachine: (machine: string, data: any, problem: string) => void): Promise<void> {
   try {
-    recordRootCauseForPareto(getCurrentCauseSummary);
     const machineIshikawa = (document.getElementById('maquina') as HTMLSelectElement)?.value?.trim() || '';
     const problemIshikawa = (document.getElementById('descripcionProblema') as HTMLTextAreaElement)?.value?.trim() || '';
     if (machineIshikawa && problemIshikawa && rcaData.ishikawa) {
@@ -408,11 +418,11 @@ export async function exportExcel(updateIshikawaForMachine: (machine: string, da
     addHorizontalSheet(workbook, 'Información', 'Información del Diagnóstico',
       infoHeaders(rcaData.captura || {}, rcaData.whys || {}, rcaData.acciones || { correctivas: [], preventivas: [] }),
       infoValues(rcaData.captura || {}, rcaData.whys || {}, rcaData.acciones || { correctivas: [], preventivas: [] }),
-      { greenCol: 13 });
+      { greenCol: 16 });
 
-    // ── Sheet 2: Pareto (imagen) ──
+    // ── Sheet 2: Pareto (imagen) — data-driven from the saved analyses ──
     const maqName = rcaData.captura?.maquina || '';
-    const paretoImg = createSimplifiedPareto(getAccumulatedParetoData(maqName));
+    const paretoImg = createSimplifiedPareto(buildParetoItems(savedAnalyses, maqName));
     addImageSheet(workbook, 'Pareto', 'Pareto', `Análisis #1 — ${rcaData.captura?.maquina || 'Sin máquina'}`, paretoImg, 'No hay datos de Pareto disponibles.', 620);
 
     await downloadWorkbook(workbook, buildIndividualFilename(rcaData.captura?.maquina, rcaData.captura?.fecha, 'xlsx'));

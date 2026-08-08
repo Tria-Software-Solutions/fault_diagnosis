@@ -319,7 +319,7 @@ export async function clearCurrentStep(): Promise<void> {
 export function clearCaptura(): void {
   rcaData.captura = {};
   setDatepickerValue('fechaEvento-container', [getTodayISODate()]);
-  const ids = ['maquina', 'tiempoParo', 'descripcionProblema', 'sintomas', 'responsable', 'indicador'];
+  const ids = ['maquina', 'tiempoParo', 'descripcionProblema', 'sintomas', 'responsable', 'indicador', 'ordenMantto', 'requisicion', 'codigoProducto'];
   ids.forEach(id => {
     const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     if (el) el.value = '';
@@ -367,7 +367,10 @@ export function saveCaptura(): void {
     problema: (document.getElementById('descripcionProblema') as HTMLTextAreaElement)?.value || '',
     sintomas: (document.getElementById('sintomas') as HTMLTextAreaElement)?.value || '',
     responsable: (document.getElementById('responsable') as HTMLInputElement)?.value || '',
-    indicador: (document.getElementById('indicador') as HTMLInputElement)?.value || ''
+    indicador: (document.getElementById('indicador') as HTMLInputElement)?.value || '',
+    ordenMantto: (document.getElementById('ordenMantto') as HTMLInputElement)?.value || '',
+    requisicion: (document.getElementById('requisicion') as HTMLInputElement)?.value || '',
+    codigoProducto: (document.getElementById('codigoProducto') as HTMLInputElement)?.value || ''
   };
 
   if (!rcaData.captura.problema) {

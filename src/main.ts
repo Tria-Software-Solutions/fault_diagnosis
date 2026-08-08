@@ -8,7 +8,7 @@ import { initLogViewer } from './components/log-viewer';
 import { handleError } from './utils/errorHandler';
 import { initModal } from './utils/ui';
 import { confirmAction, confirmDanger } from './utils/confirm';
-import { saveAnalysisFile, checkAnalysisFile, loadAnalysis, deleteAnalysis } from './services/analysisStorage';
+import { saveAnalysisFile, updateEntryById, checkAnalysisFile, loadAnalysis, deleteAnalysis } from './services/analysisStorage';
 import { getCurrentCauseSummary } from './state/store';
 import {
   renderWhysWizard, updateRootCauseSummary,
@@ -78,6 +78,7 @@ declare global {
     __syncIndicador: () => void;
     __closeIshikawaViewer: () => void;
     __viewIshikawaModal: () => void;
+    __editEntryById: (entryId: string) => Promise<void>;
   }
 }
 
@@ -141,6 +142,7 @@ function registerGlobalAPI(): void {
   window.__navigateStep = (dir: number) => navigateStep(dir);
   window.__clearCurrentStep = clearCurrentStep;
   window.__generateIshikawa = generateIshikawa;
+  window.__editEntryById = editEntryById;
 
   window.__saveAnalysis = saveAnalysis;
 
@@ -310,6 +312,127 @@ window.__closeIshikawaViewer = function(): void {
 };
 
 /* ==========================================================================
+   Edit Entry (from data table → wizard)
+   ========================================================================== */
+
+let editingEntryId: string | null = null;
+
+/** Populates the wizard (form + state) with an analysis's data */
+function populateWizardFromData(parsed: any): void {
+  const rawFecha = parsed.captura?.fecha;
+  const restoredFecha: string[] | undefined = Array.isArray(rawFecha) ? rawFecha : (rawFecha ? [rawFecha] : undefined);
+  const restored: RCAData = {
+    captura: { ...(parsed.captura || {}), fecha: restoredFecha },
+    whys: {
+      why1: parsed.whys?.why1 || '',
+      why2: parsed.whys?.why2 || '',
+      why3: parsed.whys?.why3 || '',
+      why4: parsed.whys?.why4 || '',
+      why5: parsed.whys?.why5 || '',
+      wizardLevel: parsed.whys?.wizardLevel ?? 1,
+      causaRaiz: parsed.whys?.causaRaiz
+    },
+    ishikawa: parsed.ishikawa || {},
+    acciones: parsed.acciones || { correctivas: [], preventivas: [] }
+  };
+  setRcaData(restored);
+
+  if (rcaData.captura.fecha?.length) {
+    setDatepickerValue('fechaEvento-container', rcaData.captura.fecha);
+  } else if (rcaData.captura.fecha === undefined) {
+    rcaData.captura.fecha = [getTodayISODate()];
+    setDatepickerValue('fechaEvento-container', [getTodayISODate()]);
+  }
+  if (rcaData.captura.maquina) {
+    const el = document.getElementById('maquina') as HTMLSelectElement | null;
+    if (el) el.value = rcaData.captura.maquina;
+  }
+  if (rcaData.captura.tiempoParo) {
+    const el = document.getElementById('tiempoParo') as HTMLInputElement | null;
+    if (el) el.value = rcaData.captura.tiempoParo;
+  }
+  if (rcaData.captura.problema) {
+    const el = document.getElementById('descripcionProblema') as HTMLTextAreaElement | null;
+    if (el) el.value = rcaData.captura.problema;
+  }
+  if (rcaData.captura.sintomas) {
+    const el = document.getElementById('sintomas') as HTMLTextAreaElement | null;
+    if (el) el.value = rcaData.captura.sintomas;
+  }
+  if (rcaData.captura.responsable) {
+    const el = document.getElementById('responsable') as HTMLInputElement | null;
+    if (el) el.value = rcaData.captura.responsable;
+  }
+  if (rcaData.captura.indicador) {
+    const values = rcaData.captura.indicador.split(',');
+    document.querySelectorAll<HTMLInputElement>('input[name="indicador"]').forEach(cb => {
+      cb.checked = values.includes(cb.value);
+    });
+    const hidden = document.getElementById('indicador') as HTMLInputElement | null;
+    if (hidden) hidden.value = rcaData.captura.indicador;
+  }
+  ['ordenMantto', 'requisicion', 'codigoProducto'].forEach(id => {
+    const value = rcaData.captura[id as keyof typeof rcaData.captura];
+    if (value && typeof value === 'string') {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.value = value;
+    }
+  });
+
+  if (typeof rcaData.whys.wizardLevel !== 'number') {
+    let hasFilled = false;
+    let lastLevel = 0;
+    for (let i = 1; i <= 5; i++) {
+      if (rcaData.whys[`why${i}` as keyof typeof rcaData.whys]) { hasFilled = true; lastLevel = i; }
+    }
+    rcaData.whys.wizardLevel = hasFilled ? 0 : 1;
+  }
+
+  CATEGORY_ORDER.forEach(cat => {
+    if (rcaData.ishikawa[cat]) {
+      const el = document.getElementById(`ishikawa-${cat}`) as HTMLTextAreaElement | null;
+      if (el) el.value = rcaData.ishikawa[cat]!;
+    }
+  });
+  refreshIshikawaDiagram();
+  updateIshikawaGenerateBtn();
+
+  clearActionPlan();
+  if (rcaData.acciones.correctivas) {
+    rcaData.acciones.correctivas.forEach((accion, index) => {
+      addAccionToDOM('correctiva', accion, index);
+    });
+  }
+  if (rcaData.acciones.preventivas) {
+    rcaData.acciones.preventivas.forEach((accion, index) => {
+      addAccionToDOM('preventiva', accion, index);
+    });
+  }
+}
+
+/** Loads an analysis's data into the wizard for editing (row Edit button) */
+async function editEntryById(entryId: string): Promise<void> {
+  const entry = savedAnalyses.find(e => e.id === entryId);
+  if (!entry) return;
+
+  editingEntryId = entryId;
+
+  populateWizardFromData(entry.data);
+  const idx = savedAnalyses.indexOf(entry);
+  setSelectedAnalysisIndex(idx >= 0 ? idx : savedAnalyses.length - 1);
+  syncSavedRcaDataFromSelected();
+
+  persistCurrentState();
+  closeTableView();
+  showTab('captura');
+  renderWhysWizard();
+  updateTabLockState();
+  updateClearAllButton();
+  updateStepNav();
+  showToast('Editando análisis… guarda en el paso Plan para actualizar.', 'info');
+}
+
+/* ==========================================================================
    Save Analysis (from Plan step)
    ========================================================================== */
 
@@ -324,16 +447,31 @@ async function saveAnalysis(): Promise<void> {
   }
 
   try {
-    // Append to the analyses array in the file
-    await saveAnalysisFile(rcaData);
+    // If an entry is being edited, update it in place; otherwise append a new one
+    const entryIdBeingEdited = editingEntryId;
+    if (entryIdBeingEdited) {
+      await updateEntryById(entryIdBeingEdited, rcaData);
+    } else {
+      // Append to the analyses array in the file
+      await saveAnalysisFile(rcaData);
+    }
 
     // Reload the full list from the server (or localStorage) to refresh savedAnalyses
     const entries = await loadAnalysis();
     setSavedAnalyses(entries);
-    setSelectedAnalysisIndex(entries.length - 1);
+
+    // Select the edited (or the newest) entry
+    if (entryIdBeingEdited) {
+      const idx = entries.findIndex(e => e.id === entryIdBeingEdited);
+      setSelectedAnalysisIndex(idx >= 0 ? idx : entries.length - 1);
+    } else {
+      setSelectedAnalysisIndex(entries.length - 1);
+    }
     syncSavedRcaDataFromSelected();
 
-    showToast('Guardado correctamente.', 'success');
+    showToast(entryIdBeingEdited ? 'Análisis actualizado correctamente.' : 'Guardado correctamente.', 'success');
+
+    editingEntryId = null;
 
     // Clear the wizard completely — start fresh
     await clearAll(true);
@@ -359,7 +497,7 @@ async function clearAll(skipConfirm = false): Promise<void> {
   }
 
   setDatepickerValue('fechaEvento-container', [getTodayISODate()]);
-  const ids = ['maquina', 'tiempoParo', 'descripcionProblema', 'sintomas', 'responsable', 'indicador'];
+  const ids = ['maquina', 'tiempoParo', 'descripcionProblema', 'sintomas', 'responsable', 'indicador', 'ordenMantto', 'requisicion', 'codigoProducto'];
   ids.forEach(id => {
     const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
     if (el) el.value = '';
@@ -454,7 +592,8 @@ async function clearAllFromTable(): Promise<void> {
 function addDataListeners(): void {
   const capturaFields = [
     'maquina', 'tiempoParo',
-    'descripcionProblema', 'sintomas', 'responsable', 'indicador'
+    'descripcionProblema', 'sintomas', 'responsable', 'indicador',
+    'ordenMantto', 'requisicion', 'codigoProducto'
   ];
   capturaFields.forEach(id => {
     const field = document.getElementById(id);
@@ -594,91 +733,10 @@ window.addEventListener('DOMContentLoaded', function() {
   // Restore saved data
   const saved = localStorage.getItem('rcaData');
   if (saved) {
-    const parsed = JSON.parse(saved);
-    const rawFecha = parsed.captura?.fecha;
-    const restoredFecha: string[] | undefined = Array.isArray(rawFecha) ? rawFecha : (rawFecha ? [rawFecha] : undefined);
-    const restored: RCAData = {
-      captura: { ...(parsed.captura || {}), fecha: restoredFecha },
-      whys: {
-        why1: parsed.whys?.why1 || '',
-        why2: parsed.whys?.why2 || '',
-        why3: parsed.whys?.why3 || '',
-        why4: parsed.whys?.why4 || '',
-        why5: parsed.whys?.why5 || '',
-        wizardLevel: parsed.whys?.wizardLevel ?? 1,
-        causaRaiz: parsed.whys?.causaRaiz
-      },
-      ishikawa: parsed.ishikawa || {},
-      acciones: parsed.acciones || { correctivas: [], preventivas: [] }
-    };
-    setRcaData(restored);
+    populateWizardFromData(JSON.parse(saved));
     // NOTE: savedRcaData is intentionally NOT set here — it must only come
     // from loadAnalysisFromJson() below (the blob file), so the "Todos los
     // datos" table only shows explicitly saved/committed data.
-
-    if (rcaData.captura.fecha?.length) {
-      setDatepickerValue('fechaEvento-container', rcaData.captura.fecha);
-    } else if (rcaData.captura.fecha === undefined) {
-      rcaData.captura.fecha = [getTodayISODate()];
-      setDatepickerValue('fechaEvento-container', [getTodayISODate()]);
-    }
-    if (rcaData.captura.maquina) {
-      const el = document.getElementById('maquina') as HTMLSelectElement | null;
-      if (el) el.value = rcaData.captura.maquina;
-    }
-    if (rcaData.captura.tiempoParo) {
-      const el = document.getElementById('tiempoParo') as HTMLInputElement | null;
-      if (el) el.value = rcaData.captura.tiempoParo;
-    }
-    if (rcaData.captura.problema) {
-      const el = document.getElementById('descripcionProblema') as HTMLTextAreaElement | null;
-      if (el) el.value = rcaData.captura.problema;
-    }
-    if (rcaData.captura.sintomas) {
-      const el = document.getElementById('sintomas') as HTMLTextAreaElement | null;
-      if (el) el.value = rcaData.captura.sintomas;
-    }
-    if (rcaData.captura.responsable) {
-      const el = document.getElementById('responsable') as HTMLInputElement | null;
-      if (el) el.value = rcaData.captura.responsable;
-    }
-    if (rcaData.captura.indicador) {
-      const values = rcaData.captura.indicador.split(',');
-      document.querySelectorAll<HTMLInputElement>('input[name="indicador"]').forEach(cb => {
-        cb.checked = values.includes(cb.value);
-      });
-      const hidden = document.getElementById('indicador') as HTMLInputElement | null;
-      if (hidden) hidden.value = rcaData.captura.indicador;
-    }
-
-    if (typeof rcaData.whys.wizardLevel !== 'number') {
-      let hasFilled = false;
-      let lastLevel = 0;
-      for (let i = 1; i <= 5; i++) {
-        if (rcaData.whys[`why${i}` as keyof typeof rcaData.whys]) { hasFilled = true; lastLevel = i; }
-      }
-      rcaData.whys.wizardLevel = hasFilled ? 0 : 1;
-    }
-
-    CATEGORY_ORDER.forEach(cat => {
-      if (rcaData.ishikawa[cat]) {
-        const el = document.getElementById(`ishikawa-${cat}`) as HTMLTextAreaElement | null;
-        if (el) el.value = rcaData.ishikawa[cat]!;
-      }
-    });
-    refreshIshikawaDiagram();
-    updateIshikawaGenerateBtn();
-
-    if (rcaData.acciones.correctivas) {
-      rcaData.acciones.correctivas.forEach((accion, index) => {
-        addAccionToDOM('correctiva', accion, index);
-      });
-    }
-    if (rcaData.acciones.preventivas) {
-      rcaData.acciones.preventivas.forEach((accion, index) => {
-        addAccionToDOM('preventiva', accion, index);
-      });
-    }
 
     initializeDropdowns();
   }

@@ -137,6 +137,14 @@ function analysisStoragePlugin(): any {
 
 export default defineConfig({
   plugins: [tailwindcss(), analysisStoragePlugin()],
+  server: {
+    watch: {
+      // analisis/analisis.json is written by the API middleware on save —
+      // without this, Vite reloads the page and the app lands back on the
+      // wizard step instead of staying in the data table view.
+      ignored: ['**/analyses/**'],
+    },
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,

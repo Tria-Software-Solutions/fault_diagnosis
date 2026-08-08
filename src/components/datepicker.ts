@@ -47,14 +47,26 @@ function buildHTML(containerId: string, mode: DateMode, value: string[], today: 
 function renderBody(mode: DateMode, value: string[], today: string): string {
   switch (mode) {
     case 'single':
-      return `<input type="date" class="input input-bordered w-full dp-date-input" value="${escapeHtml(value[0] || '')}" max="${today}">`;
+      return `
+        <div class="dp-single-wrap">
+          <input type="date" class="dp-date-input" value="${escapeHtml(value[0] || '')}" max="${today}">
+          <button type="button" class="dp-cal-btn" title="Abrir calendario"><i class="fas fa-calendar-alt"></i></button>
+        </div>`;
     case 'range':
       const fromVal = value[0] || '';
       const toVal = value[1] || '';
       return `
-        <input type="date" class="input input-bordered w-full dp-date-input dp-range-from" value="${escapeHtml(fromVal)}" max="${toVal || today}">
-        <span class="dp-range-sep">—</span>
-        <input type="date" class="input input-bordered w-full dp-date-input dp-range-to" value="${escapeHtml(toVal)}" min="${fromVal || ''}" max="${today}">`;
+        <div class="dp-range-group">
+          <div class="dp-range-field">
+            <input type="date" class="dp-date-input dp-range-input dp-range-from" value="${escapeHtml(fromVal)}" max="${toVal || today}" title="Desde">
+            <button type="button" class="dp-cal-btn" title="Abrir calendario"><i class="fas fa-calendar-alt"></i></button>
+          </div>
+          <div class="dp-range-divider"></div>
+          <div class="dp-range-field">
+            <input type="date" class="dp-date-input dp-range-input dp-range-to" value="${escapeHtml(toVal)}" min="${fromVal || ''}" max="${today}" title="Hasta">
+            <button type="button" class="dp-cal-btn" title="Abrir calendario"><i class="fas fa-calendar-alt"></i></button>
+          </div>
+        </div>`;
     case 'multiple':
       const chips = value.map((d, i) =>
         `<span class="dp-chip">${escapeHtml(formatFullDate(d))}<button type="button" class="dp-chip-remove" data-index="${i}"><i class="fas fa-times"></i></button></span>`
@@ -62,7 +74,10 @@ function renderBody(mode: DateMode, value: string[], today: string): string {
       return `
         <div class="dp-multi-wrap">
           <div class="dp-multi-add-row">
-            <input type="date" class="input input-bordered w-full dp-date-input dp-multi-input" max="${today}">
+            <div class="dp-multi-input-wrap">
+              <input type="date" class="dp-date-input dp-multi-input" max="${today}">
+              <button type="button" class="dp-cal-btn" title="Abrir calendario"><i class="fas fa-calendar-alt"></i></button>
+            </div>
             <button type="button" class="btn btn-primary btn-sm dp-add-btn" title="Agregar fecha"><i class="fas fa-plus"></i></button>
           </div>
           <div class="dp-chips${chips ? '' : ' empty'}">
@@ -137,6 +152,11 @@ function attachBodyListeners(container: HTMLElement, onChange: (val: string[]) =
     btn.addEventListener('click', handleAddClick);
   });
 
+  container.querySelectorAll('.dp-cal-btn').forEach(btn => {
+    btn.removeEventListener('click', handleCalendarClick);
+    btn.addEventListener('click', handleCalendarClick);
+  });
+
   container.querySelectorAll('.dp-chip-remove').forEach(btn => {
     btn.removeEventListener('click', handleRemoveClick);
     btn.addEventListener('click', handleRemoveClick);
@@ -176,6 +196,17 @@ function attachBodyListeners(container: HTMLElement, onChange: (val: string[]) =
     }
   }
 
+  function handleCalendarClick(this: HTMLElement) {
+    const field = (this as HTMLElement).closest('.dp-single-wrap, .dp-range-field, .dp-multi-input-wrap') as HTMLElement | null;
+    const input = field?.querySelector('input[type="date"]') as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+    } else {
+      input.focus();
+    }
+  }
+
   function handleAddClick() {
     const input = container.querySelector('.dp-multi-input') as HTMLInputElement | null;
     if (!input || !input.value) return;
@@ -201,6 +232,28 @@ function attachBodyListeners(container: HTMLElement, onChange: (val: string[]) =
     if (body) body.innerHTML = renderBody(mode, newVal, getTodayISODate());
     attachBodyListeners(container, onChange);
   }
+}
+
+let calDelegateInitialized = false;
+
+export function initDelegatedCalendarButtons(): void {
+  if (calDelegateInitialized) return;
+  calDelegateInitialized = true;
+  document.addEventListener('click', (ev) => {
+    const target = ev.target as HTMLElement | null;
+    if (!target?.closest) return;
+    const btn = target.closest('.dp-cal-btn') as HTMLElement | null;
+    const targetId = btn?.dataset.calFor;
+    if (!btn || !targetId) return;
+    ev.stopPropagation();
+    const input = document.getElementById(targetId) as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+    } else {
+      input.focus();
+    }
+  });
 }
 
 export function getDatepickerValue(containerId: string): string[] {

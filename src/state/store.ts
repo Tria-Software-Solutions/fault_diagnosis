@@ -12,6 +12,9 @@ export interface RCACaptura {
   sintomas?: string;
   responsable?: string;
   indicador?: string;
+  ordenMantto?: string;
+  requisicion?: string;
+  codigoProducto?: string;
 }
 
 export interface RCAWhys {
@@ -51,6 +54,7 @@ export interface Accion {
   responsable: string;
   fecha: string;
   prioridad: 'alta' | 'media' | 'baja';
+  estado?: 'listo' | 'en_proceso' | 'pendiente';
 }
 
 export interface RCAAcciones {
@@ -191,11 +195,13 @@ export function reindexAcciones(tipo: string): void {
     const responsable = card.querySelector(`input[id^="accion-${tipo}-"][id$="-resp"]`) as HTMLInputElement | null;
     const fecha = card.querySelector(`input[id^="accion-${tipo}-"][id$="-fecha"]`) as HTMLInputElement | null;
     const prioridad = card.querySelector(`select[id^="accion-${tipo}-"][id$="-prio"]`) as HTMLSelectElement | null;
+    const estado = card.querySelector(`select[id^="accion-${tipo}-"][id$="-estado"]`) as HTMLSelectElement | null;
 
     if (descripcion) descripcion.id = `accion-${tipo}-${index}-desc`;
     if (responsable) responsable.id = `accion-${tipo}-${index}-resp`;
     if (fecha) fecha.id = `accion-${tipo}-${index}-fecha`;
     if (prioridad) prioridad.id = `accion-${tipo}-${index}-prio`;
+    if (estado) estado.id = `accion-${tipo}-${index}-estado`;
   });
 }
 
@@ -207,7 +213,8 @@ export function getAccionesFromDOM(tipo: string): Accion[] {
     descripcion: (document.getElementById(`accion-${tipo}-${index}-desc`) as HTMLInputElement)?.value || '',
     responsable: (document.getElementById(`accion-${tipo}-${index}-resp`) as HTMLInputElement)?.value || '',
     fecha: (document.getElementById(`accion-${tipo}-${index}-fecha`) as HTMLInputElement)?.value || '',
-    prioridad: ((document.getElementById(`accion-${tipo}-${index}-prio`) as HTMLSelectElement)?.value || 'media') as 'alta' | 'media' | 'baja'
+    prioridad: ((document.getElementById(`accion-${tipo}-${index}-prio`) as HTMLSelectElement)?.value || 'media') as 'alta' | 'media' | 'baja',
+    estado: ((document.getElementById(`accion-${tipo}-${index}-estado`) as HTMLSelectElement)?.value || 'pendiente') as 'listo' | 'en_proceso' | 'pendiente'
   }));
 }
 
@@ -329,7 +336,10 @@ export function buildSectionRows(section: DataSection, source?: RCAData): string
       { key: 'tiempoParo', label: 'Tiempo Paro', format: formatTiempoParo },
       { key: 'indicador', label: 'Indicador' },
       { key: 'sintomas', label: 'Síntomas' },
-      { key: 'responsable', label: 'Responsable' }
+      { key: 'responsable', label: 'Responsable' },
+      { key: 'ordenMantto', label: 'Orden de Mantto' },
+      { key: 'requisicion', label: 'Requisición' },
+      { key: 'codigoProducto', label: 'Código de Producto' }
     ];
   } else if (section === 'ishikawa') {
     headers = [
@@ -426,7 +436,7 @@ function buildHorizontalCell(key: string, value: string, displayValue?: string):
 }
 
 /** Builds a single editable cell for a plan action field */
-function buildPlanHorizontalCell(key: string, value: string, displayValue: string): string {
+export function buildPlanHorizontalCell(key: string, value: string, displayValue: string): string {
   const editingKey = _editingKey;
   const isEditing = editingKey === key;
   const displayVal = value ? displayValue : '<span class="val-empty">—</span>';
@@ -450,6 +460,10 @@ function buildPlanHorizontalCell(key: string, value: string, displayValue: strin
 function buildHorizontalPlanTable(acciones: RCAAcciones): string {
   const prioLabels: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
   const prioColors: Record<string, string> = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
+  const estadoLabels: Record<string, string> = { listo: 'Listo', en_proceso: 'En proceso', pendiente: 'Pendiente' };
+  const estadoColors: Record<string, string> = { listo: '#16a34a', en_proceso: '#2563eb', pendiente: '#6b7280' };
+
+  const planHeaders = '<thead><tr><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th><th>Estado</th></tr></thead>';
 
   // Combine all actions into a flat list with tipo marker
   const allActions: { tipo: string; label: string; color: string; action: Accion; idx: number }[] = [
@@ -460,8 +474,8 @@ function buildHorizontalPlanTable(acciones: RCAAcciones): string {
   if (allActions.length === 0) {
     return `<div class="overflow-x-auto rounded-box border border-base-200">
       <table class="table table-zebra table-pin-rows w-full">
-        <thead><tr><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th></tr></thead>
-        <tbody><tr><td colspan="5" class="text-center text-gray-400 italic py-4">Sin acciones registradas</td></tr></tbody>
+        ${planHeaders}
+        <tbody><tr><td colspan="6" class="text-center text-gray-400 italic py-4">Sin acciones registradas</td></tr></tbody>
       </table>
     </div>`;
   }
@@ -474,12 +488,14 @@ function buildHorizontalPlanTable(acciones: RCAAcciones): string {
     const fechaCell = buildPlanHorizontalCell(`${keyPrefix}.fecha`, action.fecha, escapeHtml(formatDate(action.fecha) || '—'));
     const prioDisplay = `<span class="plan-prio" style="background:${prioColors[action.prioridad] || '#6b7280'}">${prioLabels[action.prioridad] || action.prioridad}</span>`;
     const prioCell = buildPlanHorizontalCell(`${keyPrefix}.prioridad`, action.prioridad, prioDisplay);
-    return `<tr>${tipoCell}${descCell}${respCell}${fechaCell}${prioCell}</tr>`;
+    const estadoDisplay = `<span class="plan-prio" style="background:${estadoColors[action.estado || 'pendiente']}">${estadoLabels[action.estado || 'pendiente']}</span>`;
+    const estadoCell = buildPlanHorizontalCell(`${keyPrefix}.estado`, action.estado || '', estadoDisplay);
+    return `<tr>${tipoCell}${descCell}${respCell}${fechaCell}${prioCell}${estadoCell}</tr>`;
   }).join('');
 
   return `<div class="overflow-x-auto rounded-box border border-base-200">
     <table class="table table-zebra table-pin-rows w-full">
-      <thead><tr><th>Tipo</th><th>Descripción</th><th>Responsable</th><th>Fecha</th><th>Prioridad</th></tr></thead>
+      ${planHeaders}
       <tbody>${rows}</tbody>
     </table>
   </div>`;
@@ -496,7 +512,7 @@ export function buildDataRows(): string {
   const ishikawa = rcaData.ishikawa || {};
   const acciones = rcaData.acciones || { correctivas: [], preventivas: [] };
 
-  const hasCapturaData = !!(captura.maquina || captura.problema || captura.fecha?.length || captura.tiempoParo || captura.indicador || captura.sintomas || captura.responsable);
+  const hasCapturaData = !!(captura.maquina || captura.problema || captura.fecha?.length || captura.tiempoParo || captura.indicador || captura.sintomas || captura.responsable || captura.ordenMantto || captura.requisicion || captura.codigoProducto);
   const hasIshikawaData = !!(ishikawa.maquina || ishikawa.metodo || ishikawa.materiales || ishikawa.manoObra || ishikawa.medicion || ishikawa.medioAmbiente);
   const hasWhysData = !!(whys.why1 || whys.why2 || whys.why3 || whys.why4 || whys.why5);
   const hasPlanData = !!(acciones.correctivas.length > 0 || acciones.preventivas.length > 0);
@@ -512,7 +528,10 @@ export function buildDataRows(): string {
       { key: 'tiempoParo', label: 'Tiempo Paro' },
       { key: 'indicador', label: 'Indicador' },
       { key: 'sintomas', label: 'Síntomas' },
-      { key: 'responsable', label: 'Responsable' }
+      { key: 'responsable', label: 'Responsable' },
+      { key: 'ordenMantto', label: 'Orden de Mantto' },
+      { key: 'requisicion', label: 'Requisición' },
+      { key: 'codigoProducto', label: 'Código de Producto' }
     ];
     tables.push(buildDrawerVerticalSectionTable('Captura', 'fa-clipboard text-blue-600', capturaFields.map(f => {
       const raw = captura[f.key as keyof RCACaptura];
@@ -592,6 +611,8 @@ function buildDrawerVerticalSectionTable(
 function buildDrawerPlanSection(acciones: RCAAcciones): string {
   const prioLabels: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
   const prioBadge: Record<string, string> = { alta: 'badge-error', media: 'badge-warning', baja: 'badge-success' };
+  const estadoLabels: Record<string, string> = { listo: 'Listo', en_proceso: 'En proceso', pendiente: 'Pendiente' };
+  const estadoBadge: Record<string, string> = { listo: 'badge-success', en_proceso: 'badge-info', pendiente: 'badge-ghost' };
 
   const buildActionTable = (list: Accion[], icon: string, label: string, color: string): string => {
     if (list.length === 0) {
@@ -609,6 +630,7 @@ function buildDrawerPlanSection(acciones: RCAAcciones): string {
             <span class="inline-flex items-center gap-1"><i class="fas fa-user text-gray-400"></i> ${escapeHtml(a.responsable || '—')}</span>
             <span class="inline-flex items-center gap-1"><i class="fas fa-calendar text-gray-400"></i> ${escapeHtml(formatDate(a.fecha) || '—')}</span>
             <span class="badge badge-sm ${prioBadge[a.prioridad] || 'badge-ghost'}">${prioLabels[a.prioridad] || a.prioridad}</span>
+            <span class="badge badge-sm ${estadoBadge[a.estado || 'pendiente']}">${estadoLabels[a.estado || 'pendiente']}</span>
           </div>
         </td>
       </tr>`).join('');

@@ -1,6 +1,9 @@
 import { rcaData, type Accion } from '../state/store';
 import { getTodayISODate } from '../utils/text';
 import { confirmAction } from '../utils/confirm';
+import { initDelegatedCalendarButtons } from './datepicker';
+
+initDelegatedCalendarButtons();
 
 /* ==========================================================================
    Action Plan Component
@@ -12,14 +15,15 @@ function buildAccionHTML(tipo: string, index: number, accion: Partial<Accion> = 
   const responsable = accion.responsable || '';
   const fecha = accion.fecha || getTodayISODate();
   const prioridad = accion.prioridad || 'media';
+  const estado = accion.estado || 'pendiente';
 
   return `
     <div class="accion-card">
       <button onclick="window.__removeAccion(this, '${tipo}')" class="accion-delete-btn absolute top-3 right-3" title="Eliminar acción">
         <i class="fas fa-trash-alt"></i>
       </button>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="sm:col-span-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
           <label class="std-label" for="accion-${tipo}-${index}-desc">Descripción</label>
           <input type="text" id="accion-${tipo}-${index}-desc" value="${descripcion}"
                  class="input input-bordered w-full"
@@ -33,8 +37,10 @@ function buildAccionHTML(tipo: string, index: number, accion: Partial<Accion> = 
         </div>
         <div>
           <label class="std-label" for="accion-${tipo}-${index}-fecha">Fecha límite</label>
-          <input type="date" id="accion-${tipo}-${index}-fecha" value="${fecha}"
-                 class="input input-bordered w-full">
+          <div class="dp-single-wrap">
+            <input type="date" id="accion-${tipo}-${index}-fecha" value="${fecha}" class="dp-date-input">
+            <button type="button" class="dp-cal-btn" data-cal-for="accion-${tipo}-${index}-fecha" title="Abrir calendario"><i class="fas fa-calendar-alt"></i></button>
+          </div>
         </div>
         <div class="select-wrapper">
           <label class="std-label" for="accion-${tipo}-${index}-prio">Prioridad</label>
@@ -42,6 +48,14 @@ function buildAccionHTML(tipo: string, index: number, accion: Partial<Accion> = 
             <option value="alta" ${prioridad === 'alta' ? 'selected' : ''}>Alta</option>
             <option value="media" ${prioridad === 'media' ? 'selected' : ''}>Media</option>
             <option value="baja" ${prioridad === 'baja' ? 'selected' : ''}>Baja</option>
+          </select>
+        </div>
+        <div class="select-wrapper">
+          <label class="std-label" for="accion-${tipo}-${index}-estado">Estado</label>
+          <select id="accion-${tipo}-${index}-estado" class="select select-bordered w-full">
+            <option value="listo" ${estado === 'listo' ? 'selected' : ''}>Listo</option>
+            <option value="en_proceso" ${estado === 'en_proceso' ? 'selected' : ''}>En proceso</option>
+            <option value="pendiente" ${estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
           </select>
         </div>
       </div>

@@ -114,6 +114,189 @@
           ]
         }
       }
+    },
+    {
+      "id": "1782bd76-5461-4db1-9f49-144fd433d493",
+      "savedAt": "2026-08-08T01:33:52.786Z",
+      "data": {
+        "captura": {
+          "fecha": [
+            "2026-03-18"
+          ],
+          "maquina": "Estampadora 1",
+          "tiempoParo": "19",
+          "problema": "Aequitas demergo aequitas stella caritas vapulus color appello.",
+          "sintomas": "Iusto quidem audeo vetus contego terra uter.",
+          "responsable": "Odit suppono cohibeo aequus dedecor.",
+          "indicador": "MTTR",
+          "ordenMantto": "Sublime vulticulus denique.",
+          "requisicion": "Aveho sufficio patria substantia usque vesco nulla vitiosus conspergo utroque.",
+          "codigoProducto": "Totus cursus appono subnecto thymbra."
+        },
+        "whys": {
+          "why1": "Dicta stultus currus subiungo.",
+          "why2": "Conor custodia convoco deorsum tero comis consuasor teres certe.",
+          "why3": "Eligendi substantia damnatio ago degenero.",
+          "why4": "Auctus beneficium cultura magni ciminatio depopulo cornu numquam strues.",
+          "why5": "Brevis comptus vir.",
+          "wizardLevel": 5
+        },
+        "ishikawa": {
+          "maquina": "Cumque catena dolore tenetur sum censura.",
+          "metodo": "Accusator vulnero cavus careo.",
+          "materiales": "Allatus sequi timor.",
+          "manoObra": "Cursus tamen minima deripio suus vita dignissimos creber ex porro.",
+          "medicion": "Nisi voluptatibus vaco desidero suscipit vindico minus comitatus.",
+          "medioAmbiente": "Sol dignissimos quia."
+        },
+        "acciones": {
+          "correctivas": [
+            {
+              "descripcion": "Textor volva teres compono textilis defluo soleo super consuasor admiratio.",
+              "responsable": "Advoco aestas arca laborum callide absque virga quod.",
+              "fecha": "2026-06-27",
+              "prioridad": "media",
+              "estado": "en_proceso"
+            }
+          ],
+          "preventivas": [
+            {
+              "descripcion": "Creta suppellex tumultus theatrum venio temeritas assumenda defungo umquam verumtamen.",
+              "responsable": "Suffoco verus rerum terreo solutio.",
+              "fecha": "2027-02-26",
+              "prioridad": "alta",
+              "estado": "listo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "9118b0f5-a7d9-4825-a910-ca164529d3d7",
+      "savedAt": "2026-08-08T01:39:21.705Z",
+      "data": {
+        "captura": {
+          "fecha": [
+            "2026-04-29"
+          ],
+          "maquina": "Generadora 1",
+          "tiempoParo": "459",
+          "problema": "Subnecto cognomen deludo ciminatio ademptio nisi maxime.",
+          "sintomas": "Surgo ea quasi vitae texo anser demonstro.",
+          "responsable": "Vorax repudiandae crapula.",
+          "indicador": "TNP",
+          "ordenMantto": "Totus textilis coniecto id natus nemo blandior canonicus enim angelus.",
+          "requisicion": "Absconditus cimentarius verumtamen supra atque civitas nemo.",
+          "codigoProducto": "Quam conturbo armarium tum auxilium spes."
+        },
+        "whys": {
+          "why1": "Delectatio inventore verus concido.",
+          "why2": "Deduco celer dolorum patrocinor.",
+          "why3": "Correptius sed adicio consuasor via triduana cogito absconditus.",
+          "why4": "Excepturi desparatus urbs deinde defaeco sublime commemoro aegre pecco.",
+          "why5": "Patior capto video.",
+          "wizardLevel": 5
+        },
+        "ishikawa": {
+          "maquina": "Textus aliqua valeo varietas decet calcar qui crux.",
+          "metodo": "Synagoga corrumpo adfectus acervus paens ver aliqua crux.",
+          "materiales": "Spectaculum supplanto abstergo arbustum conor.",
+          "manoObra": "Thorax autus adimpleo canis vindico itaque casso balbus earum thema.",
+          "medicion": "Non ocer incidunt.",
+          "medioAmbiente": "Strues autus cometes totidem deprimo comprehendo sit."
+        },
+        "acciones": {
+          "correctivas": [
+            {
+              "descripcion": "Sub comminor ciminatio suppono natus argumentum compono excepturi villa.",
+              "responsable": "Avarus acer validus sortitus.",
+              "fecha": "2025-09-20",
+              "prioridad": "alta",
+              "estado": "pendiente"
+            }
+          ],
+          "preventivas": [
+            {
+              "descripcion": "Spiculum facere cometes deprecator tum debeo.",
+              "responsable": "Curto agnosco eaque magni strues delinquo urbs a corroboro est.",
+              "fecha": "2027-05-21",
+              "prioridad": "alta",
+              "estado": "listo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "efc5636a-2008-40cf-bcfb-fc5a75474e17",
+      "savedAt": "2026-08-08T02:04:38.514Z",
+      "data": {
+        "captura": {
+          "fecha": [
+            "2025-04-14",
+            "2026-03-28"
+          ],
+          "maquina": "Grabadora 2",
+          "tiempoParo": "389",
+          "problema": "Thymbra bene vesper suasoria.",
+          "sintomas": "Aiunt cogo cernuus.",
+          "responsable": "Coma capto soluta carpo sint.",
+          "indicador": "MTTR",
+          "ordenMantto": "Confero vulgaris vacuus cogo creptio vulariter tenuis.",
+          "requisicion": "Decor sursum cibo unus solio tabernus patria nesciunt.",
+          "codigoProducto": "Velum conculco acerbitas."
+        },
+        "whys": {
+          "why1": "Delectus cuppedia conor celer sumo creta talio iusto.",
+          "why2": "Virgo trans velum aqua paens crustulum ascit.",
+          "why3": "Timidus averto cui.",
+          "why4": "Utor usitas angulus substantia abstergo unus utpote aptus debilito.",
+          "why5": "",
+          "wizardLevel": 5
+        },
+        "ishikawa": {
+          "maquina": "Triumphus appono apparatus aestus correptius confero adamo caelestis.\nTriumphus appono apparatus aestus correptius confero adamo caelestis.\nTriumphus appono apparatus aestus correptius confero adamo caelestis.\nTriumphus appono apparatus aestus correptius confero adamo caelestis.",
+          "metodo": "Animus assentator cupio delicate validus tendo error modi.",
+          "materiales": "Assentator theca sufficio ait surgo deprimo armarium.",
+          "manoObra": "Quas conduco vallum.",
+          "medicion": "Tres voluptas terra fugiat calamitas.",
+          "medioAmbiente": "Confugo apto argentum celebrer."
+        },
+        "acciones": {
+          "correctivas": [
+            {
+              "descripcion": "Iusto votum aro tamen caritas solus audax sodalitas commodi.",
+              "responsable": "Arto avaritia victus umbra sursum.",
+              "fecha": "2026-11-20",
+              "prioridad": "alta",
+              "estado": "pendiente"
+            },
+            {
+              "descripcion": "Adfectus amplitudo contego aliqua suppellex.",
+              "responsable": "Corpus suppono certe.",
+              "fecha": "2027-05-28",
+              "prioridad": "baja",
+              "estado": "pendiente"
+            }
+          ],
+          "preventivas": [
+            {
+              "descripcion": "Subiungo sunt tenuis civitas aptus thorax charisma eligendi.",
+              "responsable": "Trepide attollo coruscus ante reiciendis sol verbera.",
+              "fecha": "2025-10-28",
+              "prioridad": "baja",
+              "estado": "pendiente"
+            },
+            {
+              "descripcion": "Verbum delibero vos tracto aliquid valeo delectatio enim ullus.",
+              "responsable": "Sulum votum acceptus defungo decerno corrumpo asporto coniecto voluptatibus congregatio.",
+              "fecha": "2025-08-22",
+              "prioridad": "alta",
+              "estado": "pendiente"
+            }
+          ]
+        }
+      }
     }
   ]
 }
