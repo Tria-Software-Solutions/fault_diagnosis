@@ -350,15 +350,23 @@ export function renderDataTable(): void {
     paginationHtml = buildPaginationHtml(filtered.length, start + 1, start + pageEntries.length);
   }
 
-// For Plan section, show a single flat table: one row per action across
-  // all filtered entries (same distribution as the other tabs)
+// For Plan section, show a single flat table grouped by machine: each
+  // machine gets a group header row followed by its actions.
   if (currentDataTab === 'plan') {
     const prioLabels: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
     const prioColors: Record<string, string> = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
     const estadoLabels: Record<string, string> = { listo: 'Listo', en_proceso: 'En proceso', pendiente: 'Pendiente' };
     const estadoColors: Record<string, string> = { listo: '#16a34a', en_proceso: '#2563eb', pendiente: '#6b7280' };
 
-    const planRows = pageEntries.flatMap((entry, idx) => {
+    const grouped: Array<{ maquina: string; rows: string[]; total: number; fechas: string[] }> = [];
+    const groupIndex = new Map<string, number>();
+
+    const shortDate = (iso: string): string => {
+      const p = iso.split('-');
+      return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
+    };
+
+    pageEntries.forEach((entry, idx) => {
       const num = start + idx + 1;
       const maquina = entry.data.captura?.maquina || 'Sin máquina';
       const acciones = entry.data.acciones || { correctivas: [], preventivas: [] };
@@ -380,32 +388,54 @@ export function renderDataTable(): void {
         </div>
       </td>`;
 
+      let gi = groupIndex.get(maquina);
+      if (gi === undefined) {
+        gi = grouped.length;
+        groupIndex.set(maquina, gi);
+        grouped.push({ maquina, rows: [], total: 0, fechas: [] });
+      }
+
+      const fechasEntry = (entry.data.captura?.fecha || [])
+        .filter(Boolean)
+        .map(shortDate)
+        .filter(f => !grouped[gi].fechas.includes(f));
+      grouped[gi].fechas.push(...fechasEntry);
+
       if (list.length === 0) {
-        return [`<tr>
+        grouped[gi].rows.push(`<tr>
           <td class="text-center text-xs font-mono text-base-content/40">${num}</td>
           <td class="text-sm">${escapeHtml(maquina)}</td>
           <td colspan="5" class="text-center text-base-content/30 italic py-3">Sin acciones registradas</td>
           ${entryActions}${exportCells}
-        </tr>`];
+        </tr>`);
+        return;
       }
 
-      return list.map(({ tipo, label, color, action, idx: actionIdx }) => {
-        const keyPrefix = `plan.${tipo}.${actionIdx}`;
+      list.forEach(({ tipo, label, color, action, idx: actionIdx }) => {
         const tipoCell = `<td class="text-sm"><span style="color:${color};font-weight:600;font-size:12px">${label}</span></td>`;
         const prioDisplay = `<span class="plan-prio" style="background:${prioColors[action.prioridad] || '#6b7280'}">${prioLabels[action.prioridad] || action.prioridad}</span>`;
         const estadoDisplay = `<span class="plan-prio" style="background:${estadoColors[action.estado || 'pendiente']}">${estadoLabels[action.estado || 'pendiente']}</span>`;
-        return `<tr>
+        grouped[gi].rows.push(`<tr>
           <td class="text-center text-xs font-mono text-base-content/40">${num}</td>
           <td class="text-sm font-medium">${escapeHtml(maquina)}</td>
           ${tipoCell}
-          ${buildPlanCell(`${keyPrefix}.descripcion`, action.descripcion, escapeHtml(action.descripcion || '—'))}
-          ${buildPlanCell(`${keyPrefix}.responsable`, action.responsable, escapeHtml(action.responsable || '—'))}
-          ${buildPlanCell(`${keyPrefix}.fecha`, action.fecha, escapeHtml(formatFechas(action.fecha) || '—'))}
-          ${buildPlanCell(`${keyPrefix}.prioridad`, action.prioridad || '', prioDisplay)}
-          ${buildPlanCell(`${keyPrefix}.estado`, action.estado || '', estadoDisplay)}
+          <td class="text-sm">${escapeHtml(action.descripcion || '—')}</td>
+          <td class="text-sm">${escapeHtml(action.responsable || '—')}</td>
+          <td class="text-sm">${escapeHtml(formatFechas(action.fecha) || '—')}</td>
+          <td>${prioDisplay}</td>
+          <td>${estadoDisplay}</td>
           ${entryActions}${exportCells}
-        </tr>`;
+        </tr>`);
+        grouped[gi].total++;
       });
+    });
+
+    const planRows = grouped.map((g) => {
+      const fechasHtml = g.fechas.length
+        ? `<span class="plan-group-fechas"><i class="fas fa-calendar-alt"></i>${g.fechas.join(', ')}</span>`
+        : '';
+      const head = `<tr class="plan-group-row"><td colspan="10"><i class="fas fa-cogs plan-group-icon"></i>${escapeHtml(g.maquina)}<span class="plan-group-count">${g.total} acción${g.total === 1 ? '' : 'es'}</span>${fechasHtml}</td></tr>`;
+      return head + g.rows.join('');
     }).join('');
 
     container.innerHTML = `<div class="data-table-scroll overflow-x-auto rounded-box border border-base-200">

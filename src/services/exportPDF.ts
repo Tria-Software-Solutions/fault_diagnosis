@@ -335,7 +335,8 @@ export function formatFechaLarga(iso: string, includeYear: boolean): string {
  *  - mismo año:      "lunes 23 de agosto - jueves 26 de agosto de 2026"
  *  - años distintos: "lunes 29 de diciembre de 2025 - jueves 2 de enero de 2026" */
 export function formatFechas(fechas: string[] | string | undefined): string {
-  const list = (Array.isArray(fechas) ? fechas : []).filter(Boolean);
+  // Accepts a single ISO date string or an array (the action's fecha is a plain string)
+  const list = (Array.isArray(fechas) ? fechas : fechas ? [fechas] : []).filter(Boolean);
   if (!list.length) return '';
   if (list.length === 1) return formatFechaLarga(list[0], true);
   const mismoAnio = new Set(list.map(f => f.split('-')[0])).size === 1;

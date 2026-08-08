@@ -1759,6 +1759,58 @@ body:not(.loading) .main-content {
   letter-spacing: 0.04em;
 }
 
+/* Group tab: group header row per machine in the data table */
+.plan-group-row td {
+  background: #eef2f7;
+  border-top: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+
+.plan-group-row td i.plan-group-icon {
+  color: #2563eb;
+  margin-right: 8px;
+  font-size: 13px;
+}
+
+.plan-group-count {
+  margin-left: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.plan-group-fechas {
+  margin-left: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #059669;
+}
+
+.plan-group-fechas i {
+  margin-right: 5px;
+  font-size: 11px;
+}
+
+[data-theme="corporate-dark"] .plan-group-row td {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+[data-theme="corporate-dark"] .plan-group-count {
+  color: #94a3b8;
+}
+
+[data-theme="corporate-dark"] .plan-group-fechas {
+  color: #34d399;
+}
+
 /* ==========================================================================
    Datepicker Component — Multi-mode (single, multiple, range)
    ========================================================================== */
