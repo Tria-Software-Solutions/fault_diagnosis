@@ -2272,12 +2272,12 @@ body.table-view-open {
   overflow: hidden;
 }
 
-/* The data view gets an explicit viewport height (≈150px of chrome = header +
-   footer nav). The flex chain inherits it, so the table scrolls internally
-   and the pagination bar is always visible without page scrolling. */
+/* The data view gets an explicit viewport height (≈170px of chrome = header +
+   footer nav + breathing room for the pagination bar). The flex chain inherits
+   it, so the table scrolls internally and the pagination is always visible. */
 #content-tabla {
   flex: none;
-  height: calc(100vh - 150px);
+  height: calc(100vh - 170px);
   min-height: 320px;
   display: flex;
   flex-direction: column;
