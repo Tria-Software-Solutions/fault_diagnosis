@@ -2272,17 +2272,22 @@ body.table-view-open {
   overflow: hidden;
 }
 
+/* The data view gets an explicit viewport height (≈150px of chrome = header +
+   footer nav). The flex chain inherits it, so the table scrolls internally
+   and the pagination bar is always visible without page scrolling. */
 #content-tabla {
+  flex: none;
+  height: calc(100vh - 150px);
+  min-height: 320px;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
 #content-tabla .step-card {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
 }
 
 #content-tabla .step-body {
