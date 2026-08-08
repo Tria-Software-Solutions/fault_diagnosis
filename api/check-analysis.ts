@@ -14,7 +14,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const meta = await head(BLOB_FILENAME);
     if (!meta) return res.status(200).json({ exists: false });
 
-    const resp = await fetch(meta.downloadUrl, {
+    // cache=0 bypasses the CDN so reads after an overwrite always reflect
+    // the latest write (Vercel Blob overwrites may otherwise be stale up to 60s)
+    const url = new URL(meta.downloadUrl);
+    url.searchParams.set('cache', '0');
+    const resp = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
     });
     const record = await resp.json();
